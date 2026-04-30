@@ -34,6 +34,16 @@ async def lifespan(app: FastAPI):
                 await dao.set_config(db, key=key, value=value, value_type=value_type, description=description)
         logger.info("Default configs initialized")
 
+    # Initialize AI host engine
+    from ai.host_engine import host_engine
+    async with async_session() as db:
+        ai_mode = await dao.get_config(db, "ai_mode") or "local_lightweight"
+        host_style = await dao.get_config(db, "host_style") or "warm"
+        tts_speed = float(await dao.get_config(db, "tts_speed") or "1.0")
+        host_engine.configure(ai_mode=ai_mode, host_style=host_style, tts_speed=tts_speed)
+    await host_engine.initialize()
+    logger.info("AI Host engine initialized")
+
     logger.info("Butterfly Radio backend ready.")
     yield
     # Shutdown
