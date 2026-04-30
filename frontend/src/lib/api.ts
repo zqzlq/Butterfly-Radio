@@ -1,8 +1,13 @@
 const BASE_URL = "http://127.0.0.1:3000/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isFormData = options?.body instanceof URLSearchParams;
+  const headers: Record<string, string> = isFormData
+    ? { "Content-Type": "application/x-www-form-urlencoded", ...(options?.headers as Record<string, string>) }
+    : { "Content-Type": "application/json", ...(options?.headers as Record<string, string>) };
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers,
     ...options,
   });
   if (!res.ok) {

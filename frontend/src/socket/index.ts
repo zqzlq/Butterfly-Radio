@@ -22,6 +22,10 @@ export function getSocket(): Socket {
       store().setOnline(true);
     });
 
+    socket.on("connected", (data: { sid: string }) => {
+      console.log("[Socket.IO] 服务端确认:", data.sid);
+    });
+
     socket.on("disconnect", (reason) => {
       console.log("[Socket.IO] 断开连接:", reason);
       store().setOnline(false);
