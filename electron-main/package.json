@@ -1,0 +1,48 @@
+{
+  "name": "butterfly-radio",
+  "productName": "Butterfly Radio",
+  "version": "0.1.0",
+  "description": "Local AI Radio Desktop Application",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc && electron .",
+    "build": "tsc",
+    "package": "tsc && electron-builder",
+    "package:win": "tsc && electron-builder --win",
+    "package:mac": "tsc && electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-is-dev": "^3.0.1"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.6.3"
+  },
+  "build": {
+    "appId": "com.butterfly.radio",
+    "productName": "Butterfly Radio",
+    "directories": {
+      "output": "../dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "../frontend/dist/**/*",
+      "../resources/**/*",
+      "!node_modules"
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "../resources/assets/icon.ico"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "../resources/assets/icon.icns"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

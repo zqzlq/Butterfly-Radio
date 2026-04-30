@@ -1,0 +1,36 @@
+# Butterfly Radio - Python Backend Dependencies
+# Core framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-socketio==5.11.0
+
+# Database
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+alembic==1.14.0
+
+# Task scheduling
+apscheduler==4.0.0a5
+
+# Audio processing
+pydub==0.25.1
+ffmpeg-python==0.2.0
+
+# Async file I/O
+aiofiles==24.1.0
+
+# Data validation
+pydantic==2.9.0
+pydantic-settings==2.6.0
+
+# AI - LLM (lightweight)
+# llama-cpp-python==0.3.0  # Uncomment for local LLM
+
+# AI - TTS
+# chattts==0.1.0  # Uncomment for local TTS
+
+# Utilities
+python-dotenv==1.0.1
+python-multipart==0.0.12
+httpx==0.27.0
+loguru==0.7.2
