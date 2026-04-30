@@ -84,6 +84,7 @@ async function startPythonBackend(): Promise<boolean> {
       ...process.env,
       PYTHON_PORT: String(PYTHON_PORT),
       PYTHONUNBUFFERED: "1",
+      BUTTERFLY_DEV: isDev ? "1" : "0",
     },
     windowsHide: true,
   });

@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -13,20 +14,32 @@ FFMPEG_PATH = None
 
 
 def _find_ffmpeg() -> Optional[str]:
-    """Find FFmpeg binary - bundled or system."""
+    """Find FFmpeg binary - bundled, Electron resources, or system."""
     global FFMPEG_PATH
     if FFMPEG_PATH:
         return FFMPEG_PATH
 
-    # Check bundled ffmpeg
-    bundled = Path(__file__).parent.parent.parent / "resources" / "ffmpeg"
-    for name in ("ffmpeg.exe", "ffmpeg"):
-        path = bundled / name
-        if path.exists():
-            FFMPEG_PATH = str(path)
-            AudioSegment.converter = FFMPEG_PATH
-            logger.info(f"Using bundled FFmpeg: {FFMPEG_PATH}")
-            return FFMPEG_PATH
+    search_dirs = []
+
+    # Dev mode: project root resources/ffmpeg/
+    search_dirs.append(Path(__file__).parent.parent.parent / "resources" / "ffmpeg")
+
+    # PyInstaller bundled: next to the executable
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).parent
+        search_dirs.append(exe_dir / "ffmpeg")
+        # Electron extraResources: resources/ffmpeg/ relative to app
+        search_dirs.append(exe_dir.parent / "resources" / "ffmpeg")
+        search_dirs.append(exe_dir.parent.parent / "resources" / "ffmpeg")
+
+    for ffmpeg_dir in search_dirs:
+        for name in ("ffmpeg.exe", "ffmpeg"):
+            path = ffmpeg_dir / name
+            if path.exists():
+                FFMPEG_PATH = str(path)
+                AudioSegment.converter = FFMPEG_PATH
+                logger.info(f"Using FFmpeg: {FFMPEG_PATH}")
+                return FFMPEG_PATH
 
     # Check system PATH
     import shutil

@@ -1,9 +1,21 @@
 import io
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+
+
+def _get_temp_dir(subdir: str) -> Path:
+    """Resolve temp directory — next to executable in bundled mode, CWD in dev."""
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).parent / "temp"
+    else:
+        base = Path("temp")
+    path = base / subdir
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 class TTSEngine:
@@ -17,8 +29,7 @@ class TTSEngine:
         self._tts = None
         self._speed = 1.0
         self._sample_rate = 24000
-        self._output_dir = Path("temp/tts")
-        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._output_dir = _get_temp_dir("tts")
 
     def set_mode(self, mode: str):
         """Set the TTS mode."""

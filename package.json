@@ -5,12 +5,15 @@
   "description": "本地私有化 AI 电台",
   "scripts": {
     "dev:frontend": "cd frontend && pnpm dev",
-    "dev:backend": "cd python-backend && python main.py",
+    "dev:backend": "cd python-backend && BUTTERFLY_DEV=1 python main.py",
     "dev:electron": "cd electron-main && npm run dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"sleep 3 && npm run dev:electron\"",
     "build:frontend": "cd frontend && pnpm build",
-    "build:backend": "cd python-backend && pyinstaller build.spec",
+    "build:backend": "cd python-backend && pyinstaller butterfly-radio-backend.spec --noconfirm",
     "build:electron": "cd electron-main && npm run build && npm run package",
+    "build:all": "npm run build:frontend && npm run build:backend && npm run build:electron",
+    "package:win": "npm run build:frontend && npm run build:backend && cd electron-main && npm run package:win",
+    "package:mac": "npm run build:frontend && npm run build:backend && cd electron-main && npm run package:mac",
     "install:all": "cd frontend && pnpm install && cd ../electron-main && npm install && cd ../python-backend && pip install -r requirements.txt"
   },
   "devDependencies": {

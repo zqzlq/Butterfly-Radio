@@ -33,6 +33,16 @@
         "from": "../python-backend/dist/butterfly-radio-backend",
         "to": "python-backend",
         "filter": ["**/*"]
+      },
+      {
+        "from": "../resources/ffmpeg",
+        "to": "ffmpeg",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../resources/default-music",
+        "to": "default-music",
+        "filter": ["**/*"]
       }
     ],
     "win": {

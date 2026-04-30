@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,7 +74,20 @@ async def import_directory(db: AsyncSession, directory: str) -> list[Song]:
 
 async def scan_default_music(db: AsyncSession) -> list[Song]:
     """Scan the default music directory on startup."""
-    default_dir = Path(__file__).parent.parent.parent / "resources" / "default-music"
-    if default_dir.exists():
-        return await import_directory(db, str(default_dir))
+    candidates = [
+        # Dev mode: project root
+        Path(__file__).parent.parent.parent / "resources" / "default-music",
+    ]
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).parent
+        candidates.insert(0, exe_dir / "default-music")
+        candidates.append(exe_dir.parent / "resources" / "default-music")
+        candidates.append(exe_dir.parent.parent / "resources" / "default-music")
+
+    for default_dir in candidates:
+        if default_dir.exists():
+            logger.info(f"Found default music directory: {default_dir}")
+            return await import_directory(db, str(default_dir))
+
     return []

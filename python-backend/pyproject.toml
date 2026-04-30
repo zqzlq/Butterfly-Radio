@@ -5,6 +5,9 @@ description = "Butterfly Radio - Local AI Radio Backend"
 requires-python = ">=3.11"
 readme = "README.md"
 
+[project.optional-dependencies]
+dev = ["pyinstaller>=6.0", "pytest>=8.0", "ruff>=0.4"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

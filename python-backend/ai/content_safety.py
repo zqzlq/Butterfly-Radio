@@ -31,14 +31,23 @@ class ContentSafety:
     def _load_custom_words(self):
         """Load custom sensitive words from config file."""
         try:
-            words_file = "config/sensitive_words.txt"
-            if __import__("os").path.exists(words_file):
-                with open(words_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        word = line.strip()
-                        if word and not word.startswith("#"):
-                            self._custom_words.add(word)
-                logger.info(f"Loaded {len(self._custom_words)} custom sensitive words")
+            import sys
+            from pathlib import Path
+
+            candidates = [Path("config/sensitive_words.txt")]
+            if getattr(sys, "frozen", False):
+                exe_dir = Path(sys.executable).parent
+                candidates.insert(0, exe_dir / "config" / "sensitive_words.txt")
+
+            for words_file in candidates:
+                if words_file.exists():
+                    with open(words_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            word = line.strip()
+                            if word and not word.startswith("#"):
+                                self._custom_words.add(word)
+                    logger.info(f"Loaded {len(self._custom_words)} custom sensitive words from {words_file}")
+                    return
         except Exception as e:
             logger.warning(f"Failed to load custom sensitive words: {e}")
 

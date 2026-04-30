@@ -10,8 +10,11 @@ env/
 # Build outputs
 dist/
 dist-electron/
-build/
 *.egg-info/
+
+# PyInstaller build artifacts
+python-backend/build/
+python-backend/dist/
 
 # IDE
 .vscode/

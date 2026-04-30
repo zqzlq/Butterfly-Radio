@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +14,12 @@ from core.audio_engine import mix_song_with_commentary
 from db import dao
 
 # Temp directory for generated commentary audio
-COMMENTARY_DIR = Path("temp/commentary")
+if getattr(sys, "frozen", False):
+    _temp_base = Path(sys.executable).parent / "temp"
+else:
+    _temp_base = Path("temp")
+
+COMMENTARY_DIR = _temp_base / "commentary"
 COMMENTARY_DIR.mkdir(parents=True, exist_ok=True)
 
 
