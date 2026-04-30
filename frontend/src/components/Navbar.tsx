@@ -1,7 +1,8 @@
-import { Settings, Radio, WifiOff } from "lucide-react";
+import { Settings, Radio, WifiOff, Minus, Square, X } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { useClock } from "@/hooks/useClock";
 import { cn } from "@/lib/cn";
+import { isElectron, minimizeWindow, closeWindow } from "@/lib/electron";
 
 export function Navbar() {
   const isLive = usePlayerStore((s) => s.isLive);
@@ -10,9 +11,16 @@ export function Navbar() {
   const toggleMiniMode = usePlayerStore((s) => s.toggleMiniMode);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
   const clock = useClock();
+  const isDesktop = isElectron();
 
   return (
-    <nav className="flex items-center justify-between h-14 px-6 glass-panel shrink-0 z-50">
+    <nav
+      className={cn(
+        "flex items-center justify-between h-14 px-6 glass-panel shrink-0 z-50",
+        isDesktop && "select-none"
+      )}
+      style={isDesktop ? { WebkitAppRegion: "drag" } as any : undefined}
+    >
       {/* Logo */}
       <div className="flex items-center gap-2.5">
         <Radio className="w-5 h-5 text-neon-cyan neon-text" />
@@ -27,7 +35,7 @@ export function Navbar() {
       </div>
 
       {/* Status & Controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" style={isDesktop ? { WebkitAppRegion: "no-drag" } as any : undefined}>
         {/* Online/Offline indicator */}
         {!isOnline && (
           <div className="badge bg-text-disabled/15 text-text-secondary border border-text-disabled/30">
@@ -80,6 +88,24 @@ export function Navbar() {
         >
           HIDE
         </button>
+
+        {/* Electron window controls */}
+        {isDesktop && (
+          <div className="flex items-center gap-0.5 ml-2">
+            <button
+              onClick={minimizeWindow}
+              className="w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-white/[0.06] rounded transition-colors"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={closeWindow}
+              className="w-7 h-7 flex items-center justify-center text-text-secondary hover:text-neon-pink hover:bg-neon-pink/10 rounded transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </nav>
   );

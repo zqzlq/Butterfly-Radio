@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePlayerStore } from "@/store";
 import { getSocket } from "@/socket";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { liveApi, playlistApi, aiApi } from "@/lib/api";
-import { loadAndPlay } from "@/player";
+import { isElectron } from "@/lib/electron";
 import { Navbar } from "@/components/Navbar";
 import { MainContent } from "@/components/MainContent";
 import { InteractionBar } from "@/components/InteractionBar";
@@ -13,11 +13,24 @@ import { MiniPlayer } from "@/components/MiniPlayer";
 export default function App() {
   const isLoading = usePlayerStore((s) => s.isLoading);
   const isMiniMode = usePlayerStore((s) => s.isMiniMode);
-  const [initError, setInitError] = useState<string | null>(null);
 
   useKeyboard();
 
   useEffect(() => {
+    const api = isElectron() ? window.electronAPI : null;
+
+    // In Electron, wait for backend-ready signal before initializing
+    if (api) {
+      const unsubscribe = api.onBackendReady(() => {
+        console.log("[App] 后端已就绪，开始初始化...");
+        initializeApp();
+      });
+      // Also start Socket.IO immediately
+      getSocket();
+      return unsubscribe;
+    }
+
+    // In browser mode, initialize directly
     getSocket();
     initializeApp();
   }, []);
@@ -45,12 +58,10 @@ export default function App() {
           store.setCurrentTime(state.current_position || 0);
           store.setPlaying(true);
         } else if (songs.length > 0) {
-          // No active broadcast, set first song as current
           store.setCurrentSong(songs[0]);
           store.setDuration(songs[0].duration);
         }
-      } catch (e) {
-        // Backend not ready yet — that's OK
+      } catch {
         console.warn("后端状态获取失败，使用本地数据");
       }
 
@@ -60,14 +71,13 @@ export default function App() {
         if (hostInfo.host?.name) {
           store.setHostName(hostInfo.host.name);
         }
-      } catch (e) {
+      } catch {
         // Ignore
       }
 
       store.setLoading(false);
     } catch (e: any) {
       console.error("应用初始化失败:", e);
-      // Still show the UI even if backend is not available
       store.setLoading(false);
     }
   }

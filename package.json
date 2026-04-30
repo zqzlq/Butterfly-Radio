@@ -1,0 +1,19 @@
+{
+  "name": "butterfly-radio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "本地私有化 AI 电台",
+  "scripts": {
+    "dev:frontend": "cd frontend && pnpm dev",
+    "dev:backend": "cd python-backend && python main.py",
+    "dev:electron": "cd electron-main && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"sleep 3 && npm run dev:electron\"",
+    "build:frontend": "cd frontend && pnpm build",
+    "build:backend": "cd python-backend && pyinstaller build.spec",
+    "build:electron": "cd electron-main && npm run build && npm run package",
+    "install:all": "cd frontend && pnpm install && cd ../electron-main && npm install && cd ../python-backend && pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

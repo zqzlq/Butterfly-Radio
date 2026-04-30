@@ -2,7 +2,7 @@
   "name": "butterfly-radio",
   "productName": "Butterfly Radio",
   "version": "0.1.0",
-  "description": "Local AI Radio Desktop Application",
+  "description": "本地私有化 AI 电台",
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsc && electron .",
@@ -10,9 +10,6 @@
     "package": "tsc && electron-builder",
     "package:win": "tsc && electron-builder --win",
     "package:mac": "tsc && electron-builder --mac"
-  },
-  "dependencies": {
-    "electron-is-dev": "^3.0.1"
   },
   "devDependencies": {
     "electron": "^30.0.0",
@@ -30,6 +27,13 @@
       "../frontend/dist/**/*",
       "../resources/**/*",
       "!node_modules"
+    ],
+    "extraResources": [
+      {
+        "from": "../python-backend/dist/butterfly-radio-backend",
+        "to": "python-backend",
+        "filter": ["**/*"]
+      }
     ],
     "win": {
       "target": ["nsis", "portable"],
