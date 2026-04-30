@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, Cpu, Monitor, Cloud } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
+import { aiApi, configApi } from "@/lib/api";
 
 const TABS = [
   { key: "ai", label: "AI 模式" },
@@ -31,6 +32,41 @@ export function SettingsPanel() {
   const [activeTab, setActiveTab] = useState<TabKey>("ai");
   const [aiMode, setAiMode] = useState("local_lightweight");
   const [hostStyle, setHostStyle] = useState("warm");
+  const [ttsSpeed, setTtsSpeed] = useState(1.0);
+  const [saving, setSaving] = useState(false);
+
+  const handleAiModeChange = async (mode: string) => {
+    setAiMode(mode);
+    setSaving(true);
+    try {
+      await aiApi.updateConfig({ mode });
+    } catch (e) {
+      console.error("保存 AI 模式失败:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleHostStyleChange = async (style: string) => {
+    setHostStyle(style);
+    setSaving(true);
+    try {
+      await aiApi.updateConfig({ host_style: style });
+    } catch (e) {
+      console.error("保存主播风格失败:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTtsSpeedChange = async (speed: number) => {
+    setTtsSpeed(speed);
+    try {
+      await aiApi.updateConfig({ tts_speed: speed });
+    } catch (e) {
+      console.error("保存语速失败:", e);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -62,9 +98,12 @@ export function SettingsPanel() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-text-primary">设置</h2>
-            <button onClick={toggleSettings} className="p-1.5 text-text-secondary hover:text-text-primary transition-colors">
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-3">
+              {saving && <span className="text-[10px] text-neon-cyan animate-pulse-neon">保存中...</span>}
+              <button onClick={toggleSettings} className="p-1.5 text-text-secondary hover:text-text-primary transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Tab: AI Mode */}
@@ -77,7 +116,7 @@ export function SettingsPanel() {
                 return (
                   <button
                     key={mode.key}
-                    onClick={() => setAiMode(mode.key)}
+                    onClick={() => handleAiModeChange(mode.key)}
                     className={cn(
                       "w-full flex items-center gap-4 p-4 rounded-card border transition-all duration-200 text-left",
                       selected
@@ -109,6 +148,19 @@ export function SettingsPanel() {
                   </button>
                 );
               })}
+
+              {/* Cloud API key input (only visible in cloud mode) */}
+              {aiMode === "cloud_api" && (
+                <div className="mt-4 p-4 rounded-card bg-bg-card border border-white/[0.06]">
+                  <label className="text-sm text-text-secondary block mb-2">API 密钥</label>
+                  <input
+                    type="password"
+                    placeholder="输入云 API 密钥"
+                    className="w-full h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                  />
+                  <p className="text-[10px] text-text-disabled mt-2">支持火山引擎豆包 / 阿里云通义千问</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -120,7 +172,7 @@ export function SettingsPanel() {
                 {HOST_STYLES.map((style) => (
                   <button
                     key={style.key}
-                    onClick={() => setHostStyle(style.key)}
+                    onClick={() => handleHostStyleChange(style.key)}
                     className={cn(
                       "px-4 py-2 rounded-capsule text-sm border transition-all duration-200",
                       hostStyle === style.key
@@ -139,12 +191,13 @@ export function SettingsPanel() {
                   min="0.5"
                   max="2"
                   step="0.1"
-                  defaultValue="1"
+                  value={ttsSpeed}
+                  onChange={(e) => handleTtsSpeedChange(parseFloat(e.target.value))}
                   className="w-full accent-neon-cyan"
                 />
                 <div className="flex justify-between text-[10px] text-text-disabled mt-1">
                   <span>0.5x</span>
-                  <span>1.0x</span>
+                  <span className="text-neon-cyan">{ttsSpeed.toFixed(1)}x</span>
                   <span>2.0x</span>
                 </div>
               </div>
