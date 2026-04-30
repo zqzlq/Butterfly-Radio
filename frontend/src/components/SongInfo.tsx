@@ -1,7 +1,22 @@
+import { useState, useEffect, useRef } from "react";
 import { usePlayerStore } from "@/store";
+import { cn } from "@/lib/cn";
 
 export function SongInfo() {
   const currentSong = usePlayerStore((s) => s.currentSong);
+  const [transitioning, setTransitioning] = useState(false);
+  const prevIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (currentSong?.id !== prevIdRef.current) {
+      prevIdRef.current = currentSong?.id ?? null;
+      if (prevIdRef.current) {
+        setTransitioning(true);
+        const timer = setTimeout(() => setTransitioning(false), 350);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentSong?.id]);
 
   if (!currentSong) {
     return (
@@ -13,7 +28,12 @@ export function SongInfo() {
   }
 
   return (
-    <div className="text-center space-y-1.5 max-w-md animate-fade-in-up">
+    <div
+      className={cn(
+        "text-center space-y-1.5 max-w-md transition-all duration-350",
+        transitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
+      )}
+    >
       <h2 className="text-xl font-bold text-text-primary truncate">
         {currentSong.title}
       </h2>

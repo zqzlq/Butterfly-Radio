@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "@/store";
+import { togglePlay, skipNext, skipPrev, toggleMute } from "@/player";
 
 export function useKeyboard() {
   useEffect(() => {
@@ -11,11 +12,18 @@ export function useKeyboard() {
       switch (e.code) {
         case "Space":
           e.preventDefault();
-          const { isPlaying } = usePlayerStore.getState();
-          usePlayerStore.getState().setPlaying(!isPlaying);
+          togglePlay();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          skipNext();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          skipPrev();
           break;
         case "KeyM":
-          usePlayerStore.getState().toggleMute();
+          toggleMute();
           break;
         case "KeyQ":
           usePlayerStore.getState().toggleQueue();

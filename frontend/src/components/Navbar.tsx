@@ -1,4 +1,4 @@
-import { Settings, EyeOff, Radio, Wifi, WifiOff } from "lucide-react";
+import { Settings, Radio, WifiOff } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { useClock } from "@/hooks/useClock";
 import { cn } from "@/lib/cn";
@@ -38,8 +38,11 @@ export function Navbar() {
 
         {/* ON AIR badge */}
         {isLive && (
-          <div className="badge bg-neon-pink/20 text-white border border-neon-pink/30">
-            <span className="w-1.5 h-1.5 rounded-full bg-neon-pink animate-pulse-neon" />
+          <div className="badge bg-neon-pink/20 text-white border border-neon-pink/30 shadow-[0_0_12px_rgba(255,0,110,0.25)]">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-neon-pink opacity-75 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-neon-pink" />
+            </span>
             <span>ON AIR</span>
           </div>
         )}

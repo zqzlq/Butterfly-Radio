@@ -1,7 +1,9 @@
+import { useRef, type MouseEvent } from "react";
 import { SkipBack, Play, Pause, SkipForward, Repeat, Heart, Volume2, VolumeX } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/utils";
+import { togglePlay, skipNext, skipPrev, seekTo, setVolume, toggleMute } from "@/player";
 
 export function PlaybackControls() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -10,11 +12,25 @@ export function PlaybackControls() {
   const duration = usePlayerStore((s) => s.duration);
   const volume = usePlayerStore((s) => s.volume);
   const isMuted = usePlayerStore((s) => s.isMuted);
-  const setPlaying = usePlayerStore((s) => s.setPlaying);
-  const setVolume = usePlayerStore((s) => s.setVolume);
-  const toggleMute = usePlayerStore((s) => s.toggleMute);
+
+  const progressRef = useRef<HTMLDivElement>(null);
+  const volumeRef = useRef<HTMLDivElement>(null);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const handleProgressClick = (e: MouseEvent) => {
+    if (!progressRef.current || !duration) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekTo(ratio * duration);
+  };
+
+  const handleVolumeClick = (e: MouseEvent) => {
+    if (!volumeRef.current) return;
+    const rect = volumeRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setVolume(ratio);
+  };
 
   return (
     <div className="flex items-center gap-3 px-5 py-2.5 rounded-capsule glass-panel">
@@ -29,24 +45,26 @@ export function PlaybackControls() {
       </button>
 
       {/* Previous */}
-      <button className="p-1.5 text-text-primary hover:text-neon-cyan transition-colors duration-200">
+      <button
+        onClick={skipPrev}
+        className="p-1.5 text-text-primary hover:text-neon-cyan transition-colors duration-200"
+      >
         <SkipBack className="w-4 h-4" />
       </button>
 
       {/* Play / Pause */}
       <button
-        onClick={() => setPlaying(!isPlaying)}
+        onClick={togglePlay}
         className="w-9 h-9 rounded-full bg-neon-cyan flex items-center justify-center text-bg-primary hover:shadow-neon-glow active:scale-95 transition-all duration-200"
       >
-        {isPlaying ? (
-          <Pause className="w-4 h-4" />
-        ) : (
-          <Play className="w-4 h-4 ml-0.5" />
-        )}
+        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
       </button>
 
       {/* Next */}
-      <button className="p-1.5 text-text-primary hover:text-neon-cyan transition-colors duration-200">
+      <button
+        onClick={skipNext}
+        className="p-1.5 text-text-primary hover:text-neon-cyan transition-colors duration-200"
+      >
         <SkipForward className="w-4 h-4" />
       </button>
 
@@ -64,9 +82,13 @@ export function PlaybackControls() {
         <span className="font-mono text-[11px] text-text-secondary w-9 text-right">
           {formatTime(currentTime)}
         </span>
-        <div className="flex-1 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer">
+        <div
+          ref={progressRef}
+          onClick={handleProgressClick}
+          className="flex-1 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer"
+        >
           <div
-            className="h-full rounded-full bg-neon-cyan transition-all duration-200"
+            className="h-full rounded-full bg-neon-cyan transition-[width] duration-100"
             style={{ width: `${progress}%` }}
           />
           <div
@@ -92,9 +114,13 @@ export function PlaybackControls() {
           )}
         </button>
         <span className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider">VOL</span>
-        <div className="w-16 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer">
+        <div
+          ref={volumeRef}
+          onClick={handleVolumeClick}
+          className="w-16 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer"
+        >
           <div
-            className="h-full rounded-full bg-neon-cyan transition-all duration-200"
+            className="h-full rounded-full bg-neon-cyan transition-[width] duration-100"
             style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
           />
           <div
