@@ -36,6 +36,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Butterfly Radio backend ready.")
     yield
+    # Shutdown
+    from core.broadcast_scheduler import broadcast_scheduler
+    broadcast_scheduler.shutdown()
     logger.info("Cleaning up resources...")
 
 
