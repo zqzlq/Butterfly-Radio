@@ -84,7 +84,7 @@ class TTSEngine:
         if self._tts:
             return await self._synthesize_local(text, output_path)
         else:
-            return await self._synthesize_fallback(text, output_path)
+            return self._generate_placeholder_audio(text, output_path)
 
     async def _synthesize_local(self, text: str, output_path: str) -> Optional[str]:
         """Synthesize using local TTS model."""

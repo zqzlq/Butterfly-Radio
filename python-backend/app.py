@@ -1,9 +1,14 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import socketio
 from loguru import logger
+
+# Load .env in the actual worker process (uvicorn reload spawns a child)
+load_dotenv(Path(__file__).parent / ".env")
 
 from db.database import init_db, async_session
 from api import router as api_router
@@ -79,6 +84,6 @@ def create_app():
         return {"status": "ok", "service": "butterfly-radio"}
 
     # Wrap with Socket.IO ASGI app
-    asgi_app = socketio.ASGIApp(sio, other_app=fastapi_app)
+    asgi_app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
 
     return asgi_app

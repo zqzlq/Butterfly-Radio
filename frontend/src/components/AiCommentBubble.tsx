@@ -42,6 +42,9 @@ export function AiCommentBubble() {
             </div>
             <p className="text-sm text-text-primary leading-relaxed">
               {item.content}
+              {item.streaming && (
+                <span className="inline-block w-0.5 h-4 bg-neon-cyan ml-0.5 animate-pulse align-text-bottom" />
+              )}
             </p>
           </div>
           <button className="p-1 text-text-secondary hover:text-neon-cyan transition-colors duration-200 shrink-0 self-start mt-1">

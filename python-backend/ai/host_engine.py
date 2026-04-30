@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ai.llm_engine import llm_engine
 from ai.tts_engine import tts_engine
 from ai.content_safety import content_safety
-from core.realtime_comm import emit_ai_commentary
+from core.realtime_comm import emit_ai_commentary, emit_ai_commentary_stream
 from core.audio_engine import mix_song_with_commentary
 from db import dao
 
@@ -157,6 +157,94 @@ class HostEngine:
 
         except Exception as e:
             logger.error(f"Commentary production failed: {e}")
+            return None
+
+    async def stream_commentary(
+        self,
+        context: str,
+        song_info: dict = None,
+        user_name: str = "听众",
+        user_message: str = None,
+    ) -> Optional[dict]:
+        """
+        Stream commentary: LLM → safety → emit chunks → TTS → final emit.
+        Returns the complete commentary dict when done.
+        """
+        import hashlib
+
+        commentary_id = hashlib.md5(f"{context}{user_name}{user_message}".encode()).hexdigest()[:12]
+
+        try:
+            # Emit start event
+            await emit_ai_commentary_stream({
+                "id": commentary_id,
+                "type": "start",
+                "content": "",
+                "context": context,
+                "host_name": llm_engine.get_host_info()["name"],
+            })
+
+            # Stream LLM tokens
+            full_text = ""
+            async for chunk, text_so_far in llm_engine.stream_commentary(
+                context=context,
+                song_info=song_info,
+                user_message=user_message,
+                user_name=user_name,
+            ):
+                full_text = text_so_far
+                await emit_ai_commentary_stream({
+                    "id": commentary_id,
+                    "type": "chunk",
+                    "content": chunk,
+                    "full_content": full_text,
+                    "context": context,
+                    "host_name": llm_engine.get_host_info()["name"],
+                })
+
+            if not full_text:
+                logger.warning(f"LLM stream returned empty for context: {context}")
+                await emit_ai_commentary_stream({
+                    "id": commentary_id,
+                    "type": "error",
+                    "content": "口播生成失败",
+                    "context": context,
+                })
+                return None
+
+            # Content safety check
+            safety = content_safety.check_text(full_text)
+            if not safety["safe"]:
+                logger.warning(f"Streamed commentary failed safety check: {safety['reason']}")
+                full_text = safety["filtered"]
+
+            # TTS synthesis (after text is complete)
+            text_hash = hashlib.md5(full_text.encode()).hexdigest()[:12]
+            audio_path = str(COMMENTARY_DIR / f"commentary_{text_hash}.wav")
+            tts_result = await tts_engine.synthesize(full_text, output_path=audio_path)
+
+            # Emit complete event
+            commentary_data = {
+                "id": commentary_id,
+                "type": "done",
+                "content": full_text,
+                "audio_path": tts_result,
+                "context": context,
+                "host_name": llm_engine.get_host_info()["name"],
+            }
+            await emit_ai_commentary_stream(commentary_data)
+
+            logger.info(f"Streamed commentary [{context}]: {full_text[:60]}...")
+            return commentary_data
+
+        except Exception as e:
+            logger.error(f"Stream commentary failed: {e}")
+            await emit_ai_commentary_stream({
+                "id": commentary_id,
+                "type": "error",
+                "content": str(e),
+                "context": context,
+            })
             return None
 
     async def mix_commentary_with_song(

@@ -51,6 +51,11 @@ async def emit_ai_commentary(data: dict):
     await sio.emit("ai_commentary", data)
 
 
+async def emit_ai_commentary_stream(data: dict):
+    """Emit AI commentary streaming chunk."""
+    await sio.emit("ai_commentary_stream", data)
+
+
 async def emit_interaction(data: dict):
     """Emit user interaction to all clients."""
     await sio.emit("interaction", data)

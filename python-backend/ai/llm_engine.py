@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Optional
 from loguru import logger
 
@@ -92,10 +93,35 @@ COMMENTARY_TEMPLATES = {
 }
 
 
+# OpenAI-compatible API providers
+API_PROVIDERS = {
+    "deepseek": {
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-v4-flash",
+    },
+    "openai": {
+        "name": "OpenAI",
+        "base_url": "https://api.openai.com",
+        "model": "gpt-4o-mini",
+    },
+    "ollama": {
+        "name": "Ollama (本地)",
+        "base_url": "http://localhost:11434",
+        "model": "qwen2.5:7b",
+    },
+    "custom": {
+        "name": "自定义",
+        "base_url": "",
+        "model": "",
+    },
+}
+
+
 class LLMEngine:
     """
     LLM engine for generating AI host commentary.
-    Supports local models (llama-cpp) and cloud APIs.
+    Supports local models (llama-cpp) and OpenAI-compatible cloud APIs.
     """
 
     def __init__(self):
@@ -104,7 +130,9 @@ class LLMEngine:
         self._llm = None
         self._cloud_client = None
         self._api_key = ""
-        self._api_provider = "doubao"
+        self._api_provider = "deepseek"
+        self._base_url = ""
+        self._model = ""
 
     def set_mode(self, mode: str):
         """Set the AI mode."""
@@ -117,15 +145,33 @@ class LLMEngine:
             self._host_style = style
             logger.info(f"Host style set to: {style}")
 
-    def set_cloud_config(self, provider: str, api_key: str):
-        """Configure cloud API settings."""
-        self._api_provider = provider
-        self._api_key = api_key
+    def set_cloud_config(self, provider: str = None, api_key: str = None, base_url: str = None, model: str = None):
+        """Configure cloud API settings. Reads from args, then env, then defaults."""
+        if provider:
+            self._api_provider = provider
+
+        self._api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "") or os.environ.get("LLM_API_KEY", "")
+
+        provider_conf = API_PROVIDERS.get(self._api_provider, API_PROVIDERS["deepseek"])
+        self._base_url = base_url or os.environ.get("LLM_BASE_URL", "") or provider_conf["base_url"]
+        self._model = model or os.environ.get("LLM_MODEL", "") or provider_conf["model"]
 
     def get_host_info(self) -> dict:
         """Get current host personality info."""
         preset = HOST_PRESETS.get(self._host_style, HOST_PRESETS["warm"])
         return {"name": preset["name"], "style": self._host_style}
+
+    def get_status(self) -> dict:
+        """Get current LLM engine status for UI display."""
+        has_key = bool(self._api_key)
+        return {
+            "mode": self._mode,
+            "provider": self._api_provider,
+            "model": self._model,
+            "base_url": self._base_url,
+            "has_api_key": has_key,
+            "ready": has_key or self._llm is not None,
+        }
 
     def _get_system_prompt(self) -> str:
         """Get the system prompt for current host style."""
@@ -134,11 +180,18 @@ class LLMEngine:
 
     async def initialize(self):
         """Initialize the LLM based on current mode."""
+        # Auto-detect: read config from env
+        self.set_cloud_config()
+
         if self._mode in ("local_lightweight", "local_highquality"):
             await self._init_local_model()
         elif self._mode == "cloud_api":
             self._init_cloud_client()
-        logger.info(f"LLM engine initialized (mode={self._mode})")
+
+        if self._api_key:
+            logger.info(f"LLM engine initialized: provider={self._api_provider}, model={self._model}, base_url={self._base_url}")
+        else:
+            logger.info("LLM engine initialized: no API key configured, using fallback templates")
 
     async def _init_local_model(self):
         """Initialize local LLM model."""
@@ -187,13 +240,18 @@ class LLMEngine:
             song_name=song_info.get("title", "") if song_info else "",
         )
 
-        if self._mode == "cloud_api" and self._cloud_client and self._api_key:
-            return await self._generate_cloud(system_prompt, user_prompt)
-        elif self._llm:
+        # Try cloud API first if key is configured
+        if self._api_key and self._base_url:
+            result = await self._call_openai_compatible(system_prompt, user_prompt)
+            if result:
+                return result
+
+        # Try local model
+        if self._llm:
             return await self._generate_local(system_prompt, user_prompt)
-        else:
-            # Fallback: return a template-based response
-            return self._fallback_commentary(context, song_info, user_name)
+
+        # Fallback: template-based response
+        return self._fallback_commentary(context, song_info, user_name)
 
     async def _generate_local(self, system_prompt: str, user_prompt: str) -> str:
         """Generate text using local LLM."""
@@ -212,28 +270,124 @@ class LLMEngine:
             logger.error(f"Local LLM generation failed: {e}")
             return self._fallback_commentary("song_intro", None, "听众")
 
-    async def _generate_cloud(self, system_prompt: str, user_prompt: str) -> str:
-        """Generate text using cloud API."""
+    async def _call_openai_compatible(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        """Call any OpenAI-compatible API (DeepSeek, Ollama, etc.)."""
+        import httpx
+
+        url = f"{self._base_url.rstrip('/')}/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": 300,
+            "temperature": 0.85,
+        }
+
         try:
-            if self._api_provider == "doubao":
-                return await self._call_doubao(system_prompt, user_prompt)
-            elif self._api_provider == "qwen":
-                return await self._call_qwen(system_prompt, user_prompt)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"].strip()
+                logger.info(f"LLM API response ({self._api_provider}): {content[:80]}...")
+                return content
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM API HTTP error {e.response.status_code}: {e.response.text[:200]}")
+        except httpx.ConnectError:
+            logger.error(f"LLM API connection failed: {self._base_url}")
         except Exception as e:
-            logger.error(f"Cloud API call failed: {e}")
-        return self._fallback_commentary("song_intro", None, "听众")
+            logger.error(f"LLM API call failed: {e}")
 
-    async def _call_doubao(self, system_prompt: str, user_prompt: str) -> str:
-        """Call Volcengine Doubao API."""
-        # Placeholder — actual API call implementation
-        logger.info("Doubao API call placeholder")
-        return self._fallback_commentary("song_intro", None, "听众")
+        return None
 
-    async def _call_qwen(self, system_prompt: str, user_prompt: str) -> str:
-        """Call Alibaba Qwen API."""
-        # Placeholder — actual API call implementation
-        logger.info("Qwen API call placeholder")
-        return self._fallback_commentary("song_intro", None, "听众")
+    async def stream_commentary(
+        self,
+        context: str,
+        song_info: dict = None,
+        user_message: str = None,
+        user_name: str = "听众",
+    ):
+        """
+        Stream AI commentary token by token.
+        Yields: (chunk_text: str, full_text_so_far: str)
+        """
+        system_prompt = self._get_system_prompt()
+
+        from datetime import datetime
+        now = datetime.now().strftime("%H:%M")
+
+        template = COMMENTARY_TEMPLATES.get(context, "")
+        user_prompt = template.format(
+            song_info=json.dumps(song_info, ensure_ascii=False) if song_info else "",
+            time=now,
+            user=user_name,
+            message=user_message or "",
+            song_name=song_info.get("title", "") if song_info else "",
+        )
+
+        if self._api_key and self._base_url:
+            async for chunk, full_text in self._stream_openai_compatible(system_prompt, user_prompt):
+                yield chunk, full_text
+            return
+
+        # Fallback: yield full text at once
+        text = self._fallback_commentary(context, song_info, user_name)
+        yield text, text
+
+    async def _stream_openai_compatible(self, system_prompt: str, user_prompt: str):
+        """Stream from any OpenAI-compatible API. Yields (chunk, full_text)."""
+        import httpx
+        import json as _json
+
+        url = f"{self._base_url.rstrip('/')}/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": 300,
+            "temperature": 0.85,
+            "stream": True,
+        }
+
+        full_text = ""
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            data = _json.loads(data_str)
+                            delta = data["choices"][0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                full_text += content
+                                yield content, full_text
+                        except (_json.JSONDecodeError, KeyError, IndexError):
+                            continue
+            logger.info(f"LLM stream complete ({self._api_provider}): {full_text[:80]}...")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM stream HTTP error {e.response.status_code}: {e.response.text[:200]}")
+        except httpx.ConnectError:
+            logger.error(f"LLM stream connection failed: {self._base_url}")
+        except Exception as e:
+            logger.error(f"LLM stream failed: {e}")
 
     def _fallback_commentary(self, context: str, song_info: dict = None, user_name: str = "听众") -> str:
         """Fallback template-based commentary when LLM is unavailable."""

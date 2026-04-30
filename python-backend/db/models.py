@@ -79,7 +79,7 @@ class Interaction(Base):
     user_id = Column(String(32), ForeignKey("users.id"), nullable=True)
     content = Column(Text, nullable=False)
     interaction_type = Column(String(32), nullable=False, default="message")  # message, song_request, command
-    metadata = Column(JSON, nullable=True)  # extra data like song name for requests
+    extra_data = Column(JSON, nullable=True)  # extra data like song name for requests
     ai_response = Column(Text, nullable=True)
     is_processed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

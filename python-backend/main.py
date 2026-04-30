@@ -4,7 +4,11 @@ import signal
 from pathlib import Path
 
 import uvicorn
+from dotenv import load_dotenv
 from loguru import logger
+
+# Load .env file
+load_dotenv(Path(__file__).parent / ".env")
 
 # Detect if running as PyInstaller bundle
 IS_BUNDLED = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")

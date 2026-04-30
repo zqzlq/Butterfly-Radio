@@ -25,7 +25,7 @@ async def send_interaction(data: InteractionCreate, db: AsyncSession = Depends(g
         user_id=user.id,
         content=data.content,
         interaction_type=data.interaction_type,
-        metadata=data.metadata,
+        extra_data=data.extra_data,
     )
 
     # Broadcast interaction to all clients
@@ -33,7 +33,7 @@ async def send_interaction(data: InteractionCreate, db: AsyncSession = Depends(g
         "id": interaction.id,
         "content": interaction.content,
         "interaction_type": interaction.interaction_type,
-        "metadata": interaction.metadata,
+        "extra_data": interaction.extra_data,
         "created_at": str(interaction.created_at),
     })
 

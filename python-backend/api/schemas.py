@@ -88,7 +88,7 @@ class UserResponse(BaseModel):
 class InteractionCreate(BaseModel):
     content: str = Field(..., min_length=1)
     interaction_type: str = Field(default="message")
-    metadata: Optional[dict] = None
+    extra_data: Optional[dict] = None
 
 
 class InteractionResponse(BaseModel):
@@ -96,7 +96,7 @@ class InteractionResponse(BaseModel):
     user_id: Optional[str]
     content: str
     interaction_type: str
-    metadata: Optional[dict]
+    extra_data: Optional[dict]
     ai_response: Optional[str]
     is_processed: bool
     created_at: datetime

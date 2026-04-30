@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { Send, Music, Mic } from "lucide-react";
 import { usePlayerStore } from "@/store";
-import { interactionApi, playlistApi } from "@/lib/api";
+import { interactionApi, aiApi, playlistApi } from "@/lib/api";
 import { loadAndPlay } from "@/player";
 
 export function InteractionBar() {
@@ -69,16 +69,11 @@ export function InteractionBar() {
           created_at: new Date().toISOString(),
         });
 
-        const result = await interactionApi.send(text, "message");
-        if (result.ai_response) {
-          addCommentary({
-            id: Date.now().toString(),
-            content: result.ai_response,
-            context: "chat_response",
-            host_name: usePlayerStore.getState().hostName,
-            timestamp: Date.now(),
-          });
-        }
+        // Fire-and-forget: send interaction to backend
+        interactionApi.send(text, "message").catch(() => {});
+
+        // Trigger streaming commentary via Socket.IO
+        aiApi.generateCommentary("chat_response", undefined, text).catch(() => {});
       }
     } catch (err) {
       console.error("发送失败:", err);

@@ -71,6 +71,33 @@ export function getSocket(): Socket {
       store().addCommentary(commentary);
     });
 
+    // Streaming commentary events
+    socket.on("ai_commentary_stream", (data: any) => {
+      const { id, type, content, full_content, host_name, context } = data;
+
+      if (type === "start") {
+        // Create an empty streaming bubble
+        const commentary: AiCommentary = {
+          id,
+          content: "",
+          context: context || "unknown",
+          host_name,
+          timestamp: Date.now(),
+          streaming: true,
+        };
+        store().addCommentary(commentary);
+      } else if (type === "chunk") {
+        // Update the streaming bubble content
+        store().updateStreamingCommentary(id, full_content);
+      } else if (type === "done") {
+        // Finalize the streaming bubble
+        store().finishStreamingCommentary(id, content);
+      } else if (type === "error") {
+        // Remove the streaming bubble on error
+        store().finishStreamingCommentary(id, content || "口播生成失败");
+      }
+    });
+
     // ─── Interaction events ───
 
     socket.on("interaction", (data: any) => {

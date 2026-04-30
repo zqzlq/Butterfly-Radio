@@ -21,6 +21,7 @@ export interface AiCommentary {
   host_name?: string;
   timestamp: number;
   replay?: boolean;
+  streaming?: boolean;
 }
 
 export interface User {
@@ -80,6 +81,8 @@ interface PlayerState {
   // Actions — AI
   setHostName: (name: string) => void;
   addCommentary: (commentary: AiCommentary) => void;
+  updateStreamingCommentary: (id: string, content: string) => void;
+  finishStreamingCommentary: (id: string, content: string) => void;
   clearCommentary: () => void;
 
   // Actions — UI
@@ -138,6 +141,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   addCommentary: (commentary) =>
     set((s) => ({
       commentaryHistory: [...s.commentaryHistory.slice(-4), commentary],
+    })),
+  updateStreamingCommentary: (id, content) =>
+    set((s) => ({
+      commentaryHistory: s.commentaryHistory.map((c) =>
+        c.id === id ? { ...c, content, streaming: true } : c
+      ),
+    })),
+  finishStreamingCommentary: (id, content) =>
+    set((s) => ({
+      commentaryHistory: s.commentaryHistory.map((c) =>
+        c.id === id ? { ...c, content, streaming: false } : c
+      ),
     })),
   clearCommentary: () => set({ commentaryHistory: [] }),
 
