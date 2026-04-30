@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { usePlayerStore, type Song, type AiCommentary } from "@/store";
 
 const SOCKET_URL = "http://127.0.0.1:3000";
 
@@ -14,16 +15,62 @@ export function getSocket(): Socket {
       transports: ["websocket", "polling"],
     });
 
+    const store = usePlayerStore.getState;
+
     socket.on("connect", () => {
-      console.log("[Socket.IO] Connected:", socket?.id);
+      console.log("[Socket.IO] 已连接:", socket?.id);
+      store().setOnline(true);
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("[Socket.IO] Disconnected:", reason);
+      console.log("[Socket.IO] 断开连接:", reason);
+      store().setOnline(false);
     });
 
     socket.on("connect_error", (err) => {
-      console.error("[Socket.IO] Connection error:", err.message);
+      console.error("[Socket.IO] 连接错误:", err.message);
+      store().setOnline(false);
+    });
+
+    // ─── Broadcast events ───
+
+    socket.on("playback_state", (data: any) => {
+      if ("is_playing" in data) store().setPlaying(data.is_playing);
+      if ("current_time" in data) store().setCurrentTime(data.current_time);
+      if ("duration" in data) store().setDuration(data.duration);
+    });
+
+    socket.on("song_change", (data: Song) => {
+      store().setCurrentSong(data);
+      store().setPlaying(true);
+    });
+
+    socket.on("broadcast_status", (data: { is_live: boolean }) => {
+      store().setLive(data.is_live);
+    });
+
+    socket.on("queue_update", (data: { queue: Song[] }) => {
+      store().setQueue(data.queue);
+    });
+
+    // ─── AI events ───
+
+    socket.on("ai_commentary", (data: any) => {
+      const commentary: AiCommentary = {
+        id: data.id || Date.now().toString(),
+        content: data.content,
+        context: data.context || "unknown",
+        host_name: data.host_name,
+        timestamp: Date.now(),
+        replay: data.replay,
+      };
+      store().addCommentary(commentary);
+    });
+
+    // ─── Interaction events ───
+
+    socket.on("interaction", (data: any) => {
+      store().addInteraction(data);
     });
   }
 
@@ -34,5 +81,12 @@ export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
+  }
+}
+
+export function emitEvent(event: string, data?: any) {
+  const s = getSocket();
+  if (s.connected) {
+    s.emit(event, data);
   }
 }

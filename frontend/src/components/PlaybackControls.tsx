@@ -1,59 +1,110 @@
-import { SkipBack, Play, SkipForward, Repeat, Heart, Volume2 } from "lucide-react";
+import { SkipBack, Play, Pause, SkipForward, Repeat, Heart, Volume2, VolumeX } from "lucide-react";
+import { usePlayerStore } from "@/store";
+import { cn } from "@/lib/cn";
+import { formatTime } from "@/lib/utils";
 
 export function PlaybackControls() {
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const currentSong = usePlayerStore((s) => s.currentSong);
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
+  const volume = usePlayerStore((s) => s.volume);
+  const isMuted = usePlayerStore((s) => s.isMuted);
+  const setPlaying = usePlayerStore((s) => s.setPlaying);
+  const setVolume = usePlayerStore((s) => s.setVolume);
+  const toggleMute = usePlayerStore((s) => s.toggleMute);
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
-    <div className="flex items-center gap-4 px-6 py-3 rounded-capsule glass-panel">
+    <div className="flex items-center gap-3 px-5 py-2.5 rounded-capsule glass-panel">
       {/* Favorite */}
-      <button className="p-1.5 text-text-secondary hover:text-neon-pink transition-colors duration-200">
-        <Heart className="w-5 h-5" />
+      <button
+        className={cn(
+          "p-1.5 transition-colors duration-200",
+          currentSong?.is_favorited ? "text-neon-pink" : "text-text-secondary hover:text-neon-pink"
+        )}
+      >
+        <Heart className={cn("w-4 h-4", currentSong?.is_favorited && "fill-current")} />
       </button>
 
       {/* Previous */}
       <button className="p-1.5 text-text-primary hover:text-neon-cyan transition-colors duration-200">
-        <SkipBack className="w-5 h-5" />
+        <SkipBack className="w-4 h-4" />
       </button>
 
-      {/* Play/Pause */}
-      <button className="w-10 h-10 rounded-full bg-neon-cyan flex items-center justify-center text-bg-primary hover:shadow-neon-glow transition-shadow duration-200">
-        <Play className="w-5 h-5 ml-0.5" />
+      {/* Play / Pause */}
+      <button
+        onClick={() => setPlaying(!isPlaying)}
+        className="w-9 h-9 rounded-full bg-neon-cyan flex items-center justify-center text-bg-primary hover:shadow-neon-glow active:scale-95 transition-all duration-200"
+      >
+        {isPlaying ? (
+          <Pause className="w-4 h-4" />
+        ) : (
+          <Play className="w-4 h-4 ml-0.5" />
+        )}
       </button>
 
       {/* Next */}
       <button className="p-1.5 text-text-primary hover:text-neon-cyan transition-colors duration-200">
-        <SkipForward className="w-5 h-5" />
+        <SkipForward className="w-4 h-4" />
       </button>
 
       {/* Replay */}
       <button className="flex items-center gap-1 p-1.5 text-text-secondary hover:text-neon-cyan transition-colors duration-200">
-        <Repeat className="w-4 h-4" />
-        <span className="text-[10px] font-medium uppercase tracking-wider">Replay</span>
+        <Repeat className="w-3.5 h-3.5" />
+        <span className="text-[9px] font-semibold uppercase tracking-wider">Replay</span>
       </button>
 
       {/* Divider */}
-      <div className="w-px h-6 bg-white/[0.06]" />
+      <div className="w-px h-5 bg-white/[0.06]" />
 
       {/* Progress bar */}
-      <div className="flex items-center gap-2 min-w-[200px]">
-        <span className="font-mono text-xs text-text-secondary w-10 text-right">0:00</span>
+      <div className="flex items-center gap-2 min-w-[180px]">
+        <span className="font-mono text-[11px] text-text-secondary w-9 text-right">
+          {formatTime(currentTime)}
+        </span>
         <div className="flex-1 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer">
-          <div className="h-full w-0 rounded-full bg-neon-cyan" />
-          <div className="absolute top-1/2 -translate-y-1/2 left-0 w-3 h-3 rounded-full bg-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+          <div
+            className="h-full rounded-full bg-neon-cyan transition-all duration-200"
+            style={{ width: `${progress}%` }}
+          />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-neon-glow"
+            style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}
+          />
         </div>
-        <span className="font-mono text-xs text-text-secondary w-10">0:00</span>
+        <span className="font-mono text-[11px] text-text-secondary w-9">
+          {formatTime(duration)}
+        </span>
       </div>
 
       {/* Divider */}
-      <div className="w-px h-6 bg-white/[0.06]" />
+      <div className="w-px h-5 bg-white/[0.06]" />
 
       {/* Volume */}
-      <div className="flex items-center gap-2">
-        <Volume2 className="w-4 h-4 text-text-secondary" />
-        <span className="text-[10px] font-medium text-text-secondary uppercase tracking-wider">VOL</span>
-        <div className="w-20 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer">
-          <div className="h-full w-3/4 rounded-full bg-neon-cyan" />
-          <div className="absolute top-1/2 -translate-y-1/2 left-3/4 w-3 h-3 rounded-full bg-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+      <div className="flex items-center gap-1.5">
+        <button onClick={toggleMute} className="text-text-secondary hover:text-neon-cyan transition-colors">
+          {isMuted || volume === 0 ? (
+            <VolumeX className="w-3.5 h-3.5" />
+          ) : (
+            <Volume2 className="w-3.5 h-3.5" />
+          )}
+        </button>
+        <span className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider">VOL</span>
+        <div className="w-16 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer">
+          <div
+            className="h-full rounded-full bg-neon-cyan transition-all duration-200"
+            style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
+          />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            style={{ left: `${(isMuted ? 0 : volume) * 100}%`, transform: `translate(-50%, -50%)` }}
+          />
         </div>
-        <span className="font-mono text-xs text-text-secondary w-8">72%</span>
+        <span className="font-mono text-[11px] text-text-secondary w-7">
+          {Math.round((isMuted ? 0 : volume) * 100)}%
+        </span>
       </div>
     </div>
   );
