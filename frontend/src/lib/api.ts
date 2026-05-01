@@ -83,6 +83,10 @@ export function getMediaUrl(songId: string): string {
   return `${BASE_URL.replace("/api", "")}/api/media/songs/${songId}/stream`;
 }
 
+export function getTtsAudioUrl(filename: string): string {
+  return `${BASE_URL.replace("/api", "")}/api/media/tts/${filename}`;
+}
+
 // ─── Config ───
 
 export const configApi = {

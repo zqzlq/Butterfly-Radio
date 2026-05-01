@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +10,14 @@ from db.database import get_db
 from db import dao
 
 router = APIRouter(prefix="/media", tags=["media"])
+
+# TTS commentary audio directory
+if getattr(sys, "frozen", False):
+    _temp_base = Path(sys.executable).parent / "temp"
+else:
+    _temp_base = Path("temp")
+
+COMMENTARY_DIR = _temp_base / "commentary"
 
 
 @router.get("/songs/{song_id}/stream")
@@ -56,3 +65,19 @@ async def get_cover(song_id: str, db: AsyncSession = Depends(get_db)):
 
     # Return a 1x1 transparent PNG as default
     raise HTTPException(status_code=404, detail="Cover not found")
+
+
+@router.get("/tts/{filename}")
+async def serve_tts_audio(filename: str):
+    """Serve AI commentary TTS audio files."""
+    # Prevent directory traversal
+    safe_name = Path(filename).name
+    file_path = COMMENTARY_DIR / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="TTS audio not found")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="audio/wav",
+        filename=safe_name,
+    )

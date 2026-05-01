@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { usePlayerStore, type Song, type AiCommentary } from "@/store";
+import { getTtsAudioUrl } from "@/lib/api";
 
 const SOCKET_URL = "http://127.0.0.1:3000";
 
@@ -69,6 +70,15 @@ export function getSocket(): Socket {
         replay: data.replay,
       };
       store().addCommentary(commentary);
+      // Play TTS audio if available
+      if (data.audio_path) {
+        const filename = data.audio_path.split(/[/\\]/).pop();
+        if (filename) {
+          const audio = new Audio(getTtsAudioUrl(filename));
+          audio.volume = store().volume;
+          audio.play().catch((e) => console.warn("[TTS] 播放失败:", e));
+        }
+      }
     });
 
     // Streaming commentary events
@@ -92,6 +102,15 @@ export function getSocket(): Socket {
       } else if (type === "done") {
         // Finalize the streaming bubble
         store().finishStreamingCommentary(id, content);
+        // Play TTS audio if available
+        if (data.audio_path) {
+          const filename = data.audio_path.split(/[/\\]/).pop();
+          if (filename) {
+            const audio = new Audio(getTtsAudioUrl(filename));
+            audio.volume = store().volume;
+            audio.play().catch((e) => console.warn("[TTS] 播放失败:", e));
+          }
+        }
       } else if (type === "error") {
         // Remove the streaming bubble on error
         store().finishStreamingCommentary(id, content || "口播生成失败");
