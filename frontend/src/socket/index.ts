@@ -5,6 +5,8 @@ import { getTtsAudioUrl } from "@/lib/api";
 const SOCKET_URL = "http://127.0.0.1:3000";
 
 let socket: Socket | null = null;
+// Track commentary IDs that have already been created to prevent duplicates
+const seenCommentaryIds = new Set<string>();
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -61,8 +63,15 @@ export function getSocket(): Socket {
     // ─── AI events ───
 
     socket.on("ai_commentary", (data: any) => {
+      const id = data.id || Date.now().toString();
+      if (seenCommentaryIds.has(id)) return;
+      seenCommentaryIds.add(id);
+      if (seenCommentaryIds.size > 100) {
+        const first = seenCommentaryIds.values().next().value;
+        seenCommentaryIds.delete(first);
+      }
       const commentary: AiCommentary = {
-        id: data.id || Date.now().toString(),
+        id,
         content: data.content,
         context: data.context || "unknown",
         host_name: data.host_name,
@@ -86,6 +95,12 @@ export function getSocket(): Socket {
       const { id, type, content, full_content, host_name, context } = data;
 
       if (type === "start") {
+        if (seenCommentaryIds.has(id)) return;
+        seenCommentaryIds.add(id);
+        if (seenCommentaryIds.size > 100) {
+          const first = seenCommentaryIds.values().next().value;
+          seenCommentaryIds.delete(first);
+        }
         // Create an empty streaming bubble
         const commentary: AiCommentary = {
           id,
