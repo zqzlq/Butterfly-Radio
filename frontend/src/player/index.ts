@@ -329,6 +329,9 @@ export function seekTo(seconds: number): void {
       sounds[0]._seek = clamped;
       sounds[0]._ended = false;
     }
+    // Clear old end timer — otherwise it fires based on the OLD seek position
+    // @ts-ignore — Howler internal
+    if (currentHowl._clearTimer) currentHowl._clearTimer(sounds?.[0]?._id);
   } catch { /* ignore */ }
 
   if (node) {
