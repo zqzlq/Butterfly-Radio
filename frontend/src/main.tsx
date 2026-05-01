@@ -9,15 +9,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
-// Register service worker (handles audio bypass for range requests)
+// Register service worker (bypasses cache for audio range requests)
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
-    // Unregister any stale service workers first
+    // Unregister any stale service workers that may cache 206 responses
     for (const reg of registrations) {
-      if (reg.active && !reg.active.scriptURL.includes("sw.js")) {
+      if (reg.active) {
         reg.unregister();
       }
     }
   });
+  // Re-register our clean service worker
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
