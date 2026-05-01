@@ -58,22 +58,18 @@ export function loadAndPlay(song: Song): void {
     onplay: () => {
       usePlayerStore.getState().setPlaying(true);
 
-      // Connect to Web Audio API for spectrum analysis
+      // Resume AudioContext if suspended (browser autoplay policy)
       try {
-        const { ctx, analyser } = ensureAudioContext();
-        // @ts-ignore — Howler internal access
-        const mediaNode = (currentHowl as any)?._sounds?.[0]?._node;
-        if (mediaNode && ctx.state === "suspended") {
+        const { ctx } = ensureAudioContext();
+        if (ctx.state === "suspended") {
           ctx.resume();
         }
-        if (mediaNode) {
-          const source = ctx.createMediaElementSource(mediaNode);
-          source.connect(analyser);
-          analyser.connect(ctx.destination);
-        }
-      } catch (e) {
-        // MediaElementSource already connected — that's fine
+      } catch {
+        // Ignore — visualization will just show breathing animation
       }
+
+      // Update Media Session metadata
+      updateMediaSession(song);
     },
     onpause: () => {
       usePlayerStore.getState().setPlaying(false);
@@ -102,6 +98,54 @@ export function loadAndPlay(song: Song): void {
   startProgressSync();
 }
 
+/**
+ * Update Media Session API for system media integration.
+ */
+function updateMediaSession(song: Song): void {
+  if (!("mediaSession" in navigator)) return;
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: song.title,
+    artist: song.artist,
+    album: song.album || "Butterfly Radio",
+  });
+
+  navigator.mediaSession.setActionHandler("play", () => resumePlayback());
+  navigator.mediaSession.setActionHandler("pause", () => pausePlayback());
+  navigator.mediaSession.setActionHandler("previoustrack", () => skipPrev());
+  navigator.mediaSession.setActionHandler("nexttrack", () => skipNext());
+  navigator.mediaSession.setActionHandler("seekto", (details) => {
+    if (details.seekTime != null) {
+      seekTo(details.seekTime);
+    }
+  });
+  navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+    const offset = details.seekOffset || 10;
+    seekTo(Math.max(0, getCurrentTime() - offset));
+  });
+  navigator.mediaSession.setActionHandler("seekforward", (details) => {
+    const offset = details.seekOffset || 10;
+    seekTo(Math.min(getDuration(), getCurrentTime() + offset));
+  });
+}
+
+/**
+ * Sync Media Session playback state with current player state.
+ */
+function syncMediaSessionState(): void {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.playbackState = isPlaying() ? "playing" : "paused";
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: getDuration(),
+      playbackRate: 1,
+      position: getCurrentTime(),
+    });
+  } catch {
+    // Ignore if duration is not available yet
+  }
+}
+
 let progressTimer: ReturnType<typeof setInterval> | null = null;
 
 function startProgressSync() {
@@ -113,6 +157,7 @@ function startProgressSync() {
         usePlayerStore.getState().setCurrentTime(time);
       }
     }
+    syncMediaSessionState();
   }, 250);
 }
 

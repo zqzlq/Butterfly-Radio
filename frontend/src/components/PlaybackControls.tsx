@@ -1,4 +1,4 @@
-import { useRef, type MouseEvent } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { SkipBack, Play, Pause, SkipForward, Repeat, Heart, Volume2, VolumeX } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
@@ -15,22 +15,108 @@ export function PlaybackControls() {
 
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
+  const [draggingProgress, setDraggingProgress] = useState(false);
+  const [draggingVolume, setDraggingVolume] = useState(false);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const displayVolume = isMuted ? 0 : volume;
 
-  const handleProgressClick = (e: MouseEvent) => {
-    if (!progressRef.current || !duration) return;
+  // ─── Progress bar drag ───
+
+  const calcProgressRatio = useCallback((clientX: number) => {
+    if (!progressRef.current) return 0;
     const rect = progressRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    seekTo(ratio * duration);
-  };
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }, []);
 
-  const handleVolumeClick = (e: MouseEvent) => {
-    if (!volumeRef.current) return;
+  const handleProgressDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      setDraggingProgress(true);
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const ratio = calcProgressRatio(clientX);
+      if (duration > 0) seekTo(ratio * duration);
+    },
+    [duration, calcProgressRatio]
+  );
+
+  const handleProgressMove = useCallback(
+    (clientX: number) => {
+      if (!draggingProgress || !duration) return;
+      const ratio = calcProgressRatio(clientX);
+      seekTo(ratio * duration);
+    },
+    [draggingProgress, duration, calcProgressRatio]
+  );
+
+  const handleProgressUp = useCallback(() => {
+    setDraggingProgress(false);
+  }, []);
+
+  // ─── Volume slider drag ───
+
+  const calcVolumeRatio = useCallback((clientX: number) => {
+    if (!volumeRef.current) return 0;
     const rect = volumeRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setVolume(ratio);
-  };
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }, []);
+
+  const handleVolumeDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      setDraggingVolume(true);
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const ratio = calcVolumeRatio(clientX);
+      setVolume(ratio);
+    },
+    [calcVolumeRatio]
+  );
+
+  const handleVolumeMove = useCallback(
+    (clientX: number) => {
+      if (!draggingVolume) return;
+      const ratio = calcVolumeRatio(clientX);
+      setVolume(ratio);
+    },
+    [draggingVolume, calcVolumeRatio]
+  );
+
+  const handleVolumeUp = useCallback(() => {
+    setDraggingVolume(false);
+  }, []);
+
+  // ─── Global mouse/touch listeners ───
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      handleProgressMove(e.clientX);
+      handleVolumeMove(e.clientX);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleProgressMove(e.touches[0].clientX);
+        handleVolumeMove(e.touches[0].clientX);
+      }
+    };
+    const onMouseUp = () => {
+      handleProgressUp();
+      handleVolumeUp();
+    };
+
+    if (draggingProgress || draggingVolume) {
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener("touchmove", onTouchMove);
+      document.addEventListener("touchend", onMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onMouseUp);
+    };
+  }, [draggingProgress, draggingVolume, handleProgressMove, handleVolumeMove, handleProgressUp, handleVolumeUp]);
 
   return (
     <div className="flex items-center gap-3 px-5 py-2.5 rounded-capsule glass-panel">
@@ -84,7 +170,8 @@ export function PlaybackControls() {
         </span>
         <div
           ref={progressRef}
-          onClick={handleProgressClick}
+          onMouseDown={handleProgressDown}
+          onTouchStart={handleProgressDown}
           className="flex-1 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer"
         >
           <div
@@ -92,7 +179,10 @@ export function PlaybackControls() {
             style={{ width: `${progress}%` }}
           />
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-neon-glow"
+            className={cn(
+              "absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-neon-cyan transition-opacity duration-200 shadow-neon-glow",
+              draggingProgress ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}
             style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}
           />
         </div>
@@ -116,20 +206,24 @@ export function PlaybackControls() {
         <span className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider">VOL</span>
         <div
           ref={volumeRef}
-          onClick={handleVolumeClick}
+          onMouseDown={handleVolumeDown}
+          onTouchStart={handleVolumeDown}
           className="w-16 h-[3px] rounded-full bg-text-disabled relative group cursor-pointer"
         >
           <div
             className="h-full rounded-full bg-neon-cyan transition-[width] duration-100"
-            style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
+            style={{ width: `${displayVolume * 100}%` }}
           />
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-            style={{ left: `${(isMuted ? 0 : volume) * 100}%`, transform: `translate(-50%, -50%)` }}
+            className={cn(
+              "absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-neon-cyan transition-opacity duration-200",
+              draggingVolume ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}
+            style={{ left: `${displayVolume * 100}%`, transform: `translate(-50%, -50%)` }}
           />
         </div>
         <span className="font-mono text-[11px] text-text-secondary w-7">
-          {Math.round((isMuted ? 0 : volume) * 100)}%
+          {Math.round(displayVolume * 100)}%
         </span>
       </div>
     </div>
