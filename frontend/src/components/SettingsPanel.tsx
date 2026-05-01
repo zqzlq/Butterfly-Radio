@@ -29,6 +29,8 @@ const HOST_STYLES = [
 
 export function SettingsPanel() {
   const toggleSettings = usePlayerStore((s) => s.toggleSettings);
+  const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
+  const setStreamingEnabled = usePlayerStore((s) => s.setStreamingEnabled);
   const [activeTab, setActiveTab] = useState<TabKey>("ai");
   const [aiMode, setAiMode] = useState("local_lightweight");
   const [hostStyle, setHostStyle] = useState("warm");
@@ -209,6 +211,12 @@ export function SettingsPanel() {
             <div className="space-y-5">
               <ToggleRow label="自动播放" desc="启动时自动开始电台直播" defaultChecked />
               <ToggleRow label="无缝播放" desc="歌曲之间自动交叉淡入淡出" defaultChecked />
+              <ToggleRow
+                label="AI 流式输出"
+                desc="口播文字逐字显示，关闭后等待完整回答"
+                checked={streamingEnabled}
+                onChange={setStreamingEnabled}
+              />
               <div>
                 <label className="text-sm text-text-secondary block mb-2">交叉淡入淡出时长</label>
                 <input
@@ -246,8 +254,17 @@ export function SettingsPanel() {
   );
 }
 
-function ToggleRow({ label, desc, defaultChecked = false }: { label: string; desc: string; defaultChecked?: boolean }) {
-  const [checked, setChecked] = useState(defaultChecked);
+function ToggleRow({ label, desc, defaultChecked = false, checked: controlledChecked, onChange }: {
+  label: string; desc: string; defaultChecked?: boolean;
+  checked?: boolean; onChange?: (v: boolean) => void;
+}) {
+  const [internalChecked, setInternalChecked] = useState(defaultChecked);
+  const checked = controlledChecked !== undefined ? controlledChecked : internalChecked;
+  const toggle = () => {
+    const next = !checked;
+    if (onChange) onChange(next);
+    else setInternalChecked(next);
+  };
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -255,7 +272,7 @@ function ToggleRow({ label, desc, defaultChecked = false }: { label: string; des
         <p className="text-xs text-text-secondary">{desc}</p>
       </div>
       <button
-        onClick={() => setChecked(!checked)}
+        onClick={toggle}
         className={cn(
           "w-10 h-5 rounded-full transition-colors duration-200 relative",
           checked ? "bg-neon-cyan" : "bg-text-disabled"

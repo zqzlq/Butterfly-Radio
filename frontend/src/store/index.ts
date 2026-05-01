@@ -59,6 +59,9 @@ interface PlayerState {
   isOnline: boolean;
   isLoading: boolean;
 
+  // AI Settings
+  streamingEnabled: boolean;
+
   // User
   user: User | null;
   interactions: any[];
@@ -91,6 +94,7 @@ interface PlayerState {
   toggleMiniMode: () => void;
   setOnline: (online: boolean) => void;
   setLoading: (loading: boolean) => void;
+  setStreamingEnabled: (enabled: boolean) => void;
 
   // Actions — User
   setUser: (user: User | null) => void;
@@ -120,6 +124,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isMiniMode: false,
   isOnline: true,
   isLoading: true,
+
+  streamingEnabled: true,
 
   user: null,
   interactions: [],
@@ -161,6 +167,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   toggleMiniMode: () => set((s) => ({ isMiniMode: !s.isMiniMode })),
   setOnline: (online) => set({ isOnline: online }),
   setLoading: (loading) => set({ isLoading: loading }),
+  setStreamingEnabled: (enabled) => set({ streamingEnabled: enabled }),
 
   setUser: (user) => set({ user }),
   setInteractions: (interactions) => set({ interactions }),

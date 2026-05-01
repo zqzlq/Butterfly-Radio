@@ -10,6 +10,7 @@ export function InteractionBar() {
   const addInteraction = usePlayerStore((s) => s.addInteraction);
   const addCommentary = usePlayerStore((s) => s.addCommentary);
   const queue = usePlayerStore((s) => s.queue);
+  const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -72,8 +73,8 @@ export function InteractionBar() {
         // Fire-and-forget: send interaction to backend
         interactionApi.send(text, "message").catch(() => {});
 
-        // Trigger streaming commentary via Socket.IO
-        aiApi.generateCommentary("chat_response", undefined, text).catch(() => {});
+        // Trigger commentary via Socket.IO (streaming or non-streaming based on setting)
+        aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
       }
     } catch (err) {
       console.error("发送失败:", err);

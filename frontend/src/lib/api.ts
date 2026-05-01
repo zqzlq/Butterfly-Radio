@@ -69,10 +69,10 @@ export const aiApi = {
       method: "PUT",
       body: JSON.stringify(config),
     }),
-  generateCommentary: (context: string, songId?: string, userMessage?: string) =>
+  generateCommentary: (context: string, songId?: string, userMessage?: string, stream = true) =>
     request<any>("/ai/commentary", {
       method: "POST",
-      body: JSON.stringify({ context, song_id: songId, user_message: userMessage, stream: true }),
+      body: JSON.stringify({ context, song_id: songId, user_message: userMessage, stream }),
     }),
   getPresets: () => request<Record<string, any>>("/ai/presets"),
 };
