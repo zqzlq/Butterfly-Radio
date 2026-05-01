@@ -64,7 +64,11 @@ export function getSocket(): Socket {
 
     socket.on("ai_commentary", (data: any) => {
       const id = data.id || Date.now().toString();
-      if (seenCommentaryIds.has(id)) return;
+      console.log("[Socket.IO] ai_commentary:", id, data.content?.slice(0, 30));
+      if (seenCommentaryIds.has(id)) {
+        console.warn("[Socket.IO] ai_commentary DUPLICATE blocked:", id);
+        return;
+      }
       seenCommentaryIds.add(id);
       if (seenCommentaryIds.size > 100) {
         const first = seenCommentaryIds.values().next().value;
@@ -93,9 +97,13 @@ export function getSocket(): Socket {
     // Streaming commentary events
     socket.on("ai_commentary_stream", (data: any) => {
       const { id, type, content, full_content, host_name, context } = data;
+      console.log("[Socket.IO] ai_commentary_stream:", type, id, content?.slice(0, 30));
 
       if (type === "start") {
-        if (seenCommentaryIds.has(id)) return;
+        if (seenCommentaryIds.has(id)) {
+          console.warn("[Socket.IO] ai_commentary_stream DUPLICATE blocked:", id);
+          return;
+        }
         seenCommentaryIds.add(id);
         if (seenCommentaryIds.size > 100) {
           const first = seenCommentaryIds.values().next().value;
