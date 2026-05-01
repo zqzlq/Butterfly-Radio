@@ -128,10 +128,18 @@ export function InteractionBar() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const inputRef = useRef(""); // Track latest input for onend closure
+  const isPTTRef = useRef(false); // Whether current session is push-to-talk
   const addInteraction = usePlayerStore((s) => s.addInteraction);
   const addCommentary = usePlayerStore((s) => s.addCommentary);
   const queue = usePlayerStore((s) => s.queue);
   const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
+
+  // Keep inputRef in sync
+  const setInputAndRef = (val: string) => {
+    inputRef.current = val;
+    setInput(val);
+  };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -143,7 +151,33 @@ export function InteractionBar() {
     };
   }, []);
 
-  const toggleVoiceInput = () => {
+  // Push-to-talk: hold Space key (only when input is not focused)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger when typing in input or other elements
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === "Space" && !e.repeat && !isListening) {
+        e.preventDefault();
+        isPTTRef.current = true;
+        startListening();
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space" && isPTTRef.current && isListening) {
+        e.preventDefault();
+        isPTTRef.current = false;
+        stopListening();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [isListening]);
+
+  const startListening = () => {
     if (!SpeechRecognitionAPI) {
       addCommentary({
         id: Date.now().toString(),
@@ -155,13 +189,8 @@ export function InteractionBar() {
       return;
     }
 
-    // If already listening, stop
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      return;
-    }
+    if (isListening) return;
 
-    // Create new recognition instance
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = "zh-CN";
     recognition.continuous = false;
@@ -170,7 +199,7 @@ export function InteractionBar() {
 
     recognition.onstart = () => {
       setIsListening(true);
-      setInput("");
+      setInputAndRef("");
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -186,18 +215,18 @@ export function InteractionBar() {
         }
       }
 
-      // Show interim results in input
-      setInput(finalTranscript || interimTranscript);
+      // Show final results, or interim if no final yet
+      const text = finalTranscript || interimTranscript;
+      setInputAndRef(text);
     };
 
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
-      // Auto-send if we have final text
-      const text = input.trim();
+      // Auto-send if we have text
+      const text = inputRef.current.trim();
       if (text) {
-        // Use setTimeout to ensure state is updated
-        setTimeout(() => handleSend(), 100);
+        setTimeout(() => handleSendDirect(text), 100);
       }
     };
 
@@ -219,6 +248,21 @@ export function InteractionBar() {
 
     recognitionRef.current = recognition;
     recognition.start();
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      isPTTRef.current = false;
+      startListening();
+    }
   };
 
   const handleDownloadAndPlay = async (track: any) => {
@@ -291,13 +335,30 @@ export function InteractionBar() {
     }
   };
 
+  const handleSendDirect = async (text: string) => {
+    if (!text || sending) return;
+    setInputAndRef("");
+    setSending(true);
+    try {
+      await processMessage(text);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || sending) return;
-
+    setInputAndRef("");
     setSending(true);
-    setInput("");
+    try {
+      await processMessage(text);
+    } finally {
+      setSending(false);
+    }
+  };
 
+  const processMessage = async (text: string) => {
     try {
       // Parse /点歌 command
       if (text.startsWith("/点歌") || text.startsWith("/song")) {
@@ -373,8 +434,6 @@ export function InteractionBar() {
       aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
     } catch (err) {
       console.error("发送失败:", err);
-    } finally {
-      setSending(false);
     }
   };
 
