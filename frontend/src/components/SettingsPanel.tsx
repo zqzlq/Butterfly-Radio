@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { X, Cpu, Monitor, Cloud } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
-import { aiApi, configApi } from "@/lib/api";
+import { aiApi, playlistApi } from "@/lib/api";
 
 const TABS = [
   { key: "ai", label: "AI 模式" },
   { key: "host", label: "主播设置" },
+  { key: "music", label: "音乐库" },
   { key: "playback", label: "播放设置" },
   { key: "about", label: "关于" },
 ] as const;
@@ -36,6 +37,16 @@ export function SettingsPanel() {
   const [hostStyle, setHostStyle] = useState("warm");
   const [ttsSpeed, setTtsSpeed] = useState(1.0);
   const [saving, setSaving] = useState(false);
+
+  // Music library state
+  const [songCount, setSongCount] = useState(0);
+  const [importDir, setImportDir] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    playlistApi.listSongs().then((songs) => setSongCount(songs.length)).catch(() => {});
+  }, []);
 
   const handleAiModeChange = async (mode: string) => {
     setAiMode(mode);
@@ -67,6 +78,26 @@ export function SettingsPanel() {
       await aiApi.updateConfig({ tts_speed: speed });
     } catch (e) {
       console.error("保存语速失败:", e);
+    }
+  };
+
+  const handleImport = async () => {
+    const dir = importDir.trim();
+    if (!dir || importing) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const songs = await playlistApi.importDir(dir);
+      const store = usePlayerStore.getState();
+      const allSongs = await playlistApi.listSongs();
+      store.setQueue(allSongs);
+      setSongCount(allSongs.length);
+      setImportResult(`成功导入 ${songs.length} 首歌曲`);
+      setImportDir("");
+    } catch (e: any) {
+      setImportResult(`导入失败: ${e.message}`);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -202,6 +233,63 @@ export function SettingsPanel() {
                   <span className="text-neon-cyan">{ttsSpeed.toFixed(1)}x</span>
                   <span>2.0x</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Music Library */}
+          {activeTab === "music" && (
+            <div className="space-y-5">
+              {/* Current stats */}
+              <div className="flex items-center gap-3 p-4 rounded-card bg-bg-card border border-white/[0.06]">
+                <div className="w-10 h-10 rounded-lg bg-neon-purple/20 flex items-center justify-center">
+                  <Music className="w-5 h-5 text-neon-purple" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-primary">本地音乐库</p>
+                  <p className="text-xs text-text-secondary">已收录 {songCount} 首歌曲</p>
+                </div>
+                <button
+                  onClick={() => playlistApi.listSongs().then((s) => setSongCount(s.length)).catch(() => {})}
+                  className="ml-auto p-1.5 text-text-secondary hover:text-neon-cyan transition-colors"
+                  title="刷新"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Import directory */}
+              <div>
+                <p className="text-sm text-text-secondary mb-3">添加音乐文件夹</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={importDir}
+                    onChange={(e) => setImportDir(e.target.value)}
+                    placeholder="输入文件夹路径，如 D:\Music"
+                    className="flex-1 h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                    onKeyDown={(e) => e.key === "Enter" && handleImport()}
+                  />
+                  <button
+                    onClick={handleImport}
+                    disabled={!importDir.trim() || importing}
+                    className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all flex items-center gap-1.5"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    {importing ? "导入中..." : "导入"}
+                  </button>
+                </div>
+                {importResult && (
+                  <p className={cn(
+                    "text-xs mt-2",
+                    importResult.includes("失败") ? "text-red-400" : "text-neon-cyan"
+                  )}>
+                    {importResult}
+                  </p>
+                )}
+                <p className="text-[10px] text-text-disabled mt-2">
+                  支持格式：MP3、WAV、FLAC、AAC、OGG、M4A，会递归扫描子文件夹
+                </p>
               </div>
             </div>
           )}
