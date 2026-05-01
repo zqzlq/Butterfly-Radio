@@ -81,6 +81,40 @@ async def import_songs(
     return songs
 
 
+@router.get("/browse")
+async def browse_directory(path: str = ""):
+    """List subdirectories for directory browsing."""
+    import os
+    from pathlib import Path
+
+    if not path:
+        # Return drive list on Windows
+        if os.name == "nt":
+            import string
+            drives = []
+            for letter in string.ascii_uppercase:
+                drive = f"{letter}:\\"
+                if os.path.exists(drive):
+                    drives.append({"name": drive, "path": drive})
+            return {"current": "", "parent": None, "items": drives}
+        path = "/"
+
+    dir_path = Path(path)
+    if not dir_path.exists() or not dir_path.is_dir():
+        return {"error": "目录不存在", "current": path, "parent": None, "items": []}
+
+    items = []
+    try:
+        for item in sorted(dir_path.iterdir()):
+            if item.is_dir() and not item.name.startswith("."):
+                items.append({"name": item.name, "path": str(item)})
+    except PermissionError:
+        pass
+
+    parent = str(dir_path.parent) if dir_path.parent != dir_path else None
+    return {"current": str(dir_path), "parent": parent, "items": items}
+
+
 # ─── Playlists ───
 
 @router.get("/", response_model=list[PlaylistResponse])

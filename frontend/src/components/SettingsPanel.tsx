@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw, FileAudio } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
 import { aiApi, playlistApi } from "@/lib/api";
-import { isElectron } from "@/lib/electron";
 
 const TABS = [
   { key: "ai", label: "AI 模式" },
@@ -82,8 +81,11 @@ export function SettingsPanel() {
     }
   };
 
-  const folderInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Directory browser state
+  const [browsePath, setBrowsePath] = useState("");
+  const [browseParent, setBrowseParent] = useState<string | null>(null);
+  const [browseItems, setBrowseItems] = useState<{ name: string; path: string }[]>([]);
+  const [browsing, setBrowsing] = useState(false);
 
   const doImport = async (dir: string) => {
     if (!dir || importing) return;
@@ -106,66 +108,33 @@ export function SettingsPanel() {
 
   const handleImport = () => doImport(importDir.trim());
 
-  const handleFolderSelect = async () => {
-    if (isElectron()) {
-      const api = window.electronAPI as any;
-      if (api?.openDirectoryDialog) {
-        const result = await api.openDirectoryDialog();
-        if (result) doImport(result);
-        return;
-      }
-    }
-    folderInputRef.current?.click();
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const onFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      // Extract directory path from the first file
-      const fullPath = files[0].webkitRelativePath || files[0].name;
-      const relativePath = fullPath.split("/")[0];
-      // Use the actual path if available (Electron/Chrome)
-      const filePath = (files[0] as any).path;
-      if (filePath) {
-        const dir = filePath.replace(/[/\\][^/\\]+$/, "");
-        doImport(dir);
-      } else {
-        setImportDir(relativePath);
-      }
-    }
-    e.target.value = "";
-  };
-
-  const onFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setImporting(true);
-    setImportResult(null);
+  const loadBrowse = async (path: string) => {
+    setBrowsing(true);
     try {
-      let totalImported = 0;
-      const store = usePlayerStore.getState();
-      for (const file of Array.from(files)) {
-        const filePath = (file as any).path;
-        if (filePath) {
-          const dir = filePath.replace(/[/\\][^/\\]+$/, "");
-          const songs = await playlistApi.importDir(dir);
-          totalImported += songs.length;
-        }
-      }
-      const allSongs = await playlistApi.listSongs();
-      store.setQueue(allSongs);
-      setSongCount(allSongs.length);
-      setImportResult(`成功导入 ${totalImported} 首歌曲`);
-    } catch (e: any) {
-      setImportResult(`导入失败: ${e.message}`);
+      const data = await playlistApi.browse(path);
+      setBrowsePath(data.current);
+      setBrowseParent(data.parent);
+      setBrowseItems(data.items);
+    } catch {
+      setBrowseItems([]);
     } finally {
-      setImporting(false);
+      setBrowsing(false);
     }
-    e.target.value = "";
+  };
+
+  const handleBrowseSelect = (dirPath: string) => {
+    setImportDir(dirPath);
+    loadBrowse(dirPath);
+  };
+
+  const handleBrowseUp = () => {
+    if (browseParent !== null) {
+      loadBrowse(browseParent);
+    }
+  };
+
+  const handleBrowseOpen = () => {
+    loadBrowse("");
   };
 
   return (
@@ -340,51 +309,68 @@ export function SettingsPanel() {
                   <button
                     onClick={handleImport}
                     disabled={!importDir.trim() || importing}
-                    className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all flex items-center gap-1.5"
+                    className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all"
                   >
                     {importing ? "导入中..." : "导入"}
                   </button>
                 </div>
 
-                {/* Browse buttons */}
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={handleFolderSelect}
-                    disabled={importing}
-                    className="flex-1 h-9 rounded-input border border-white/[0.06] bg-bg-card text-sm text-text-secondary hover:text-text-primary hover:border-neon-purple/30 transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <FolderOpen className="w-3.5 h-3.5" />
-                    选择文件夹
-                  </button>
-                  <button
-                    onClick={handleFileSelect}
-                    disabled={importing}
-                    className="flex-1 h-9 rounded-input border border-white/[0.06] bg-bg-card text-sm text-text-secondary hover:text-text-primary hover:border-neon-purple/30 transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <FileAudio className="w-3.5 h-3.5" />
-                    选择文件
-                  </button>
+                {/* Directory browser */}
+                <div className="mt-2">
+                  {browseItems.length === 0 && !browsing ? (
+                    <button
+                      onClick={handleBrowseOpen}
+                      className="w-full h-9 rounded-input border border-dashed border-white/[0.12] bg-bg-card text-sm text-text-secondary hover:text-neon-cyan hover:border-neon-cyan/30 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      浏览文件夹
+                    </button>
+                  ) : (
+                    <div className="rounded-card border border-white/[0.06] bg-bg-card overflow-hidden">
+                      {/* Browser header */}
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-bg-secondary/50">
+                        <button
+                          onClick={handleBrowseUp}
+                          disabled={browseParent === null}
+                          className="p-1 text-text-secondary hover:text-neon-cyan disabled:opacity-30 transition-colors"
+                          title="上级目录"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                        </button>
+                        <span className="flex-1 text-xs text-text-secondary truncate font-mono">
+                          {browsePath || "此电脑"}
+                        </span>
+                        {browsePath && (
+                          <button
+                            onClick={() => { setImportDir(browsePath); }}
+                            className="px-2 py-0.5 text-[10px] rounded bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-colors"
+                          >
+                            选此目录
+                          </button>
+                        )}
+                      </div>
+                      {/* Browser list */}
+                      <div className="max-h-40 overflow-y-auto">
+                        {browsing ? (
+                          <p className="px-3 py-3 text-xs text-text-disabled text-center">加载中...</p>
+                        ) : browseItems.length === 0 ? (
+                          <p className="px-3 py-3 text-xs text-text-disabled text-center">无子文件夹</p>
+                        ) : (
+                          browseItems.map((item) => (
+                            <button
+                              key={item.path}
+                              onClick={() => handleBrowseSelect(item.path)}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-neon-cyan/[0.05] transition-colors text-left"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5 text-neon-purple shrink-0" />
+                              <span className="truncate">{item.name}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {/* Hidden file inputs */}
-                <input
-                  ref={folderInputRef}
-                  type="file"
-                  // @ts-ignore
-                  webkitdirectory=""
-                  directory=""
-                  multiple
-                  className="hidden"
-                  onChange={onFolderInputChange}
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".mp3,.wav,.flac,.aac,.ogg,.m4a"
-                  multiple
-                  className="hidden"
-                  onChange={onFileInputChange}
-                />
                 {importResult && (
                   <p className={cn(
                     "text-xs mt-2",

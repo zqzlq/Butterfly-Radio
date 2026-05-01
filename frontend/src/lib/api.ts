@@ -45,6 +45,10 @@ export const playlistApi = {
       method: "POST",
       body: new URLSearchParams({ directory: dir }),
     }),
+  browse: (path: string) =>
+    request<{ current: string; parent: string | null; items: { name: string; path: string }[] }>(
+      `/playlist/browse?path=${encodeURIComponent(path)}`
+    ),
   listPlaylists: () => request<any[]>("/playlist/"),
   getPlaylist: (id: string) => request<any>(`/playlist/${id}`),
 };
