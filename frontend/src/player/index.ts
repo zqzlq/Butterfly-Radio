@@ -24,19 +24,17 @@ function ensureAudioContext(): { ctx: AudioContext; analyser: AnalyserNode } {
 }
 
 /**
- * Connect Howler's <audio> element to Web Audio API for frequency analysis.
- * Called once per song load. Safe to call multiple times (no-op if already connected).
+ * Connect an <audio> element to Web Audio API for frequency analysis.
+ * MUST await ctx.resume() before createMediaElementSource — otherwise the
+ * audio gets trapped in a suspended graph and produces no sound.
  */
-function connectAudioNode(): void {
+async function connectAudioNode(node: HTMLAudioElement): Promise<void> {
   try {
     const { ctx, analyser } = ensureAudioContext();
-    // @ts-ignore — Howler internal
-    const node: HTMLAudioElement | undefined = currentHowl?._sounds?.[0]?._node;
-    if (!node || !(node instanceof HTMLMediaElement)) return;
 
-    // Resume context if suspended
+    // Resume context first — this is the critical step
     if (ctx.state === "suspended") {
-      ctx.resume();
+      await ctx.resume();
     }
 
     // Only create source once per audio element
@@ -96,7 +94,14 @@ export function loadAndPlay(song: Song): void {
       usePlayerStore.getState().setPlaying(true);
 
       // Connect to Web Audio API for frequency analysis + visualization
-      connectAudioNode();
+      // Capture the audio node now — currentHowl may change before async completes
+      try {
+        // @ts-ignore — Howler internal
+        const audioNode = currentHowl?._sounds?.[0]?._node;
+        if (audioNode instanceof HTMLMediaElement) {
+          connectAudioNode(audioNode).catch(() => {});
+        }
+      } catch { /* ignore */ }
 
       // Update Media Session metadata
       updateMediaSession(song);
