@@ -4,6 +4,45 @@ import { usePlayerStore } from "@/store";
 import { interactionApi, aiApi, playlistApi } from "@/lib/api";
 import { loadAndPlay } from "@/player";
 
+/** Keywords that indicate a song request in natural language */
+const SONG_REQUEST_PATTERNS = [
+  /(?:我想听|我想听一首|来一首|来首|点一首|点首|播放|放一首|放首|听一首|听首|来个|放个|听个)\s*(.+)/,
+  /(.+?)(?:这首歌|这首|这首歌吧|来一下|安排一下)/,
+];
+
+/**
+ * Try to extract a song name from natural language text.
+ * Returns the song name if detected, or null if not a song request.
+ */
+function extractSongRequest(text: string): string | null {
+  for (const pattern of SONG_REQUEST_PATTERNS) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const name = match[1].trim().replace(/[，。！？,.!?]$/g, "");
+      if (name.length >= 1 && name.length <= 30) {
+        return name;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Search the local queue for a matching song.
+ */
+function findSongInQueue(queue: { title: string; artist: string; [key: string]: any }[], query: string) {
+  const q = query.toLowerCase();
+  // Exact title match first
+  let found = queue.find((s) => s.title.toLowerCase() === q);
+  if (found) return found;
+  // Partial title match
+  found = queue.find((s) => s.title.toLowerCase().includes(q));
+  if (found) return found;
+  // Artist match
+  found = queue.find((s) => s.artist.toLowerCase().includes(q));
+  return found || null;
+}
+
 export function InteractionBar() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -24,7 +63,6 @@ export function InteractionBar() {
       if (text.startsWith("/点歌") || text.startsWith("/song")) {
         const songName = text.replace(/^\/(点歌|song)\s*/, "").trim();
         if (songName) {
-          // Add user interaction to UI
           addInteraction({
             id: Date.now().toString(),
             content: text,
@@ -32,12 +70,7 @@ export function InteractionBar() {
             created_at: new Date().toISOString(),
           });
 
-          // Search for song in queue first
-          const found = queue.find(
-            (s) =>
-              s.title.toLowerCase().includes(songName.toLowerCase()) ||
-              s.artist.toLowerCase().includes(songName.toLowerCase())
-          );
+          const found = findSongInQueue(queue, songName);
 
           if (found) {
             loadAndPlay(found);
@@ -49,33 +82,59 @@ export function InteractionBar() {
               timestamp: Date.now(),
             });
           } else {
-            // Send to backend for processing
             const result = await interactionApi.send(text, "song_request");
             addInteraction(result);
             addCommentary({
               id: Date.now().toString(),
-              content: `收到点歌请求「${songName}」，正在搜索...`,
+              content: `收到点歌请求「${songName}」，在本地曲库中未找到匹配歌曲。`,
               context: "song_request",
               host_name: usePlayerStore.getState().hostName,
               timestamp: Date.now(),
             });
           }
         }
-      } else {
-        // Regular message
+        return;
+      }
+
+      // Natural language: detect song request intent
+      const songName = extractSongRequest(text);
+      if (songName) {
         addInteraction({
           id: Date.now().toString(),
           content: text,
-          interaction_type: "message",
+          interaction_type: "song_request",
           created_at: new Date().toISOString(),
         });
 
-        // Fire-and-forget: send interaction to backend
-        interactionApi.send(text, "message").catch(() => {});
+        const found = findSongInQueue(queue, songName);
 
-        // Trigger commentary via Socket.IO (streaming or non-streaming based on setting)
-        aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
+        if (found) {
+          loadAndPlay(found);
+          addCommentary({
+            id: Date.now().toString(),
+            content: `为你播放「${found.title}」— ${found.artist}。`,
+            context: "song_request",
+            host_name: usePlayerStore.getState().hostName,
+            timestamp: Date.now(),
+          });
+        } else {
+          // Not found locally, send to AI for commentary
+          interactionApi.send(text, "message").catch(() => {});
+          aiApi.generateCommentary("chat_response", undefined, `用户想听「${songName}」，但本地曲库中没有这首歌`, streamingEnabled).catch(() => {});
+        }
+        return;
       }
+
+      // Regular message
+      addInteraction({
+        id: Date.now().toString(),
+        content: text,
+        interaction_type: "message",
+        created_at: new Date().toISOString(),
+      });
+
+      interactionApi.send(text, "message").catch(() => {});
+      aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
     } catch (err) {
       console.error("发送失败:", err);
     } finally {
