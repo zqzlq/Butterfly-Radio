@@ -310,7 +310,7 @@ function cancelPendingSeek() {
 /**
  * Seek to position (in seconds).
  * Bypasses Howler's seek() to avoid the pause→play restart bug in HTML5 mode.
- * If the audio element hasn't loaded metadata yet, the seek is deferred.
+ * Must sync Howler's internal _seek so _start() reads the correct position on play().
  */
 export function seekTo(seconds: number): void {
   if (!currentHowl) return;
@@ -319,12 +319,23 @@ export function seekTo(seconds: number): void {
   const clamped = Math.max(0, seconds);
   const node = getAudioNode();
 
+  // Sync Howler's internal seek state — critical!
+  // Howler's _start() reads sound._seek to determine playback position.
+  // Without this, play() restarts from the old position.
+  try {
+    // @ts-ignore — Howler internal
+    const sounds = currentHowl._sounds;
+    if (sounds?.[0]) {
+      sounds[0]._seek = clamped;
+      sounds[0]._ended = false;
+    }
+  } catch { /* ignore */ }
+
   if (node) {
     if (node.readyState >= 1) {
-      // HAVE_METADATA or higher — safe to seek immediately
       node.currentTime = clamped;
     } else {
-      // Metadata not loaded yet — defer seek until it's ready
+      // Metadata not loaded yet — defer seek
       pendingSeek = clamped;
       pendingSeekNode = node;
       const handler = () => {
