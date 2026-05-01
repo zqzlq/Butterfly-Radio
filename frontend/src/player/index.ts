@@ -8,6 +8,7 @@ let pendingSeekNode: HTMLAudioElement | null = null;
 let pendingSeekHandler: (() => void) | null = null;
 let analyserNode: AnalyserNode | null = null;
 let audioContext: AudioContext | null = null;
+let mediaSourceNode: MediaElementAudioSourceNode | null = null;
 
 /**
  * Initialize the Web Audio API context and analyser for spectrum visualization.
@@ -16,10 +17,37 @@ function ensureAudioContext(): { ctx: AudioContext; analyser: AnalyserNode } {
   if (!audioContext) {
     audioContext = new AudioContext();
     analyserNode = audioContext.createAnalyser();
-    analyserNode.fftSize = 128;
+    analyserNode.fftSize = 256;
     analyserNode.smoothingTimeConstant = 0.8;
   }
   return { ctx: audioContext, analyser: analyserNode! };
+}
+
+/**
+ * Connect Howler's <audio> element to Web Audio API for frequency analysis.
+ * Called once per song load. Safe to call multiple times (no-op if already connected).
+ */
+function connectAudioNode(): void {
+  try {
+    const { ctx, analyser } = ensureAudioContext();
+    // @ts-ignore — Howler internal
+    const node: HTMLAudioElement | undefined = currentHowl?._sounds?.[0]?._node;
+    if (!node || !(node instanceof HTMLMediaElement)) return;
+
+    // Resume context if suspended
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+
+    // Only create source once per audio element
+    if (!mediaSourceNode) {
+      mediaSourceNode = ctx.createMediaElementSource(node);
+      mediaSourceNode.connect(analyser);
+      analyser.connect(ctx.destination);
+    }
+  } catch {
+    // MediaElementSource already connected for this element — OK
+  }
 }
 
 /**
@@ -49,6 +77,9 @@ export function loadAndPlay(song: Song): void {
   // Cancel any pending seek from previous song
   cancelPendingSeek();
 
+  // Reset Web Audio source node (will reconnect on play)
+  mediaSourceNode = null;
+
   // Unload previous
   if (currentHowl) {
     currentHowl.unload();
@@ -64,15 +95,8 @@ export function loadAndPlay(song: Song): void {
     onplay: () => {
       usePlayerStore.getState().setPlaying(true);
 
-      // Resume AudioContext if suspended (browser autoplay policy)
-      try {
-        const { ctx } = ensureAudioContext();
-        if (ctx.state === "suspended") {
-          ctx.resume();
-        }
-      } catch {
-        // Ignore — visualization will just show breathing animation
-      }
+      // Connect to Web Audio API for frequency analysis + visualization
+      connectAudioNode();
 
       // Update Media Session metadata
       updateMediaSession(song);

@@ -34,7 +34,7 @@ export function SongInfo() {
         transitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
       )}
     >
-      <h2 className="text-xl font-bold text-text-primary truncate">
+      <h2 className="text-xl font-bold text-text-primary truncate beat-glow">
         {currentSong.title}
       </h2>
       <p className="text-sm text-text-secondary truncate">

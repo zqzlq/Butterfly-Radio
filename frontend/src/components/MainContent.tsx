@@ -17,7 +17,7 @@ export function MainContent() {
   }
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center gap-5 px-8 py-4 overflow-hidden relative">
+    <main className="flex-1 flex flex-col items-center justify-center gap-5 px-8 py-4 overflow-hidden relative beat-border rounded-card mx-4 mb-2">
       {/* Top row: Cover + Spectrum */}
       <div className="flex items-center gap-5 w-full max-w-4xl">
         <AlbumCover />

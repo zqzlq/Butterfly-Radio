@@ -121,6 +121,20 @@
   .badge {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-capsule text-[10px] font-semibold uppercase tracking-wider;
   }
+
+  /* Beat-reactive: neon glow pulse driven by --beat custom property */
+  .beat-glow {
+    text-shadow:
+      0 0 calc(4px + var(--beat, 0) * 16px) rgba(0, 240, 255, calc(0.2 + var(--beat, 0) * 0.6)),
+      0 0 calc(2px + var(--beat, 0) * 8px) rgba(123, 97, 255, calc(0.1 + var(--beat, 0) * 0.3));
+  }
+
+  /* Beat-reactive: border/box glow pulse */
+  .beat-border {
+    box-shadow:
+      0 0 calc(6px + var(--beat, 0) * 20px) rgba(0, 240, 255, calc(0.1 + var(--beat, 0) * 0.4)),
+      inset 0 0 calc(4px + var(--beat, 0) * 12px) rgba(0, 240, 255, calc(0.02 + var(--beat, 0) * 0.08));
+  }
 }
 
 @layer utilities {

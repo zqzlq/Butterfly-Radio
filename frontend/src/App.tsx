@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { usePlayerStore } from "@/store";
 import { getSocket } from "@/socket";
 import { useKeyboard } from "@/hooks/useKeyboard";
+import { useBeat } from "@/hooks/useBeat";
 import { liveApi, playlistApi, aiApi } from "@/lib/api";
 import { isElectron } from "@/lib/electron";
 import { Navbar } from "@/components/Navbar";
@@ -15,6 +16,7 @@ export default function App() {
   const isMiniMode = usePlayerStore((s) => s.isMiniMode);
 
   useKeyboard();
+  useBeat();
 
   useEffect(() => {
     const api = isElectron() ? window.electronAPI : null;

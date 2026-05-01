@@ -119,7 +119,7 @@ export function PlaybackControls() {
   }, [draggingProgress, draggingVolume, handleProgressMove, handleVolumeMove, handleProgressUp, handleVolumeUp]);
 
   return (
-    <div className="flex items-center gap-3 px-5 py-2.5 rounded-capsule glass-panel">
+    <div className="flex items-center gap-3 px-5 py-2.5 rounded-capsule glass-panel beat-border">
       {/* Favorite */}
       <button
         className={cn(
@@ -141,7 +141,7 @@ export function PlaybackControls() {
       {/* Play / Pause */}
       <button
         onClick={togglePlay}
-        className="w-9 h-9 rounded-full bg-neon-cyan flex items-center justify-center text-bg-primary hover:shadow-neon-glow active:scale-95 transition-all duration-200"
+        className="w-9 h-9 rounded-full bg-neon-cyan flex items-center justify-center text-bg-primary hover:shadow-neon-glow active:scale-95 transition-all duration-200 beat-glow"
       >
         {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
       </button>

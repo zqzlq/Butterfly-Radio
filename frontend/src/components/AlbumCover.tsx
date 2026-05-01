@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Heart, Music } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
 import { playlistApi } from "@/lib/api";
+import { getFrequencyData } from "@/player";
 
 export function AlbumCover() {
   const currentSong = usePlayerStore((s) => s.currentSong);
@@ -10,6 +11,33 @@ export function AlbumCover() {
   const [transitioning, setTransitioning] = useState(false);
   const [favAnimating, setFavAnimating] = useState(false);
   const prevSongIdRef = useRef<string | null>(null);
+
+  // Beat-reactive animation
+  const [bass, setBass] = useState(0);
+  const bassRef = useRef(0);
+  const rafRef = useRef(0);
+
+  const updateBeat = useCallback(() => {
+    if (!usePlayerStore.getState().isPlaying) {
+      bassRef.current *= 0.92;
+      setBass(bassRef.current);
+      rafRef.current = requestAnimationFrame(updateBeat);
+      return;
+    }
+    const data = getFrequencyData();
+    const bassEnd = Math.floor(data.length / 3);
+    let sum = 0;
+    for (let i = 0; i < bassEnd; i++) sum += data[i];
+    const rawBass = bassEnd > 0 ? sum / (bassEnd * 255) : 0;
+    bassRef.current = Math.max(rawBass, bassRef.current * 0.88);
+    setBass(bassRef.current);
+    rafRef.current = requestAnimationFrame(updateBeat);
+  }, []);
+
+  useEffect(() => {
+    rafRef.current = requestAnimationFrame(updateBeat);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [updateBeat]);
 
   useEffect(() => {
     if (currentSong?.id !== prevSongIdRef.current) {
@@ -45,10 +73,11 @@ export function AlbumCover() {
       {/* Glow ring */}
       {isPlaying && (
         <div
-          className="absolute inset-[-4px] rounded-card animate-rotate-slow opacity-30"
+          className="absolute inset-[-4px] rounded-card animate-rotate-slow"
           style={{
             background: "conic-gradient(from 0deg, #00F0FF, #7B61FF, #00F0FF)",
             filter: "blur(16px)",
+            opacity: 0.2 + bass * 0.5,
           }}
         />
       )}
@@ -57,8 +86,9 @@ export function AlbumCover() {
       <div
         className={cn(
           "relative w-full h-full rounded-card overflow-hidden border border-white/[0.06] bg-bg-secondary flex items-center justify-center transition-all duration-400",
-          transitioning ? "opacity-0 scale-95" : "opacity-100 scale-100"
+          transitioning ? "opacity-0 scale-95" : "opacity-100"
         )}
+        style={isPlaying && !transitioning ? { transform: `scale(${1 + bass * 0.06})` } : undefined}
       >
         {currentSong && coverUrl ? (
           <img src={coverUrl} alt={currentSong.title} className="w-full h-full object-cover" />
