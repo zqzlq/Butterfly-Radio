@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
-import { aiApi, playlistApi } from "@/lib/api";
+import { aiApi, playlistApi, configApi } from "@/lib/api";
 
 const TABS = [
   { key: "ai", label: "AI 模式" },
@@ -50,7 +50,12 @@ export function SettingsPanel() {
     playlistApi.listSongs().then((songs) => setSongCount(songs.length)).catch(() => {});
     // Load current AI config
     aiApi.getHost().then((data) => {
-      if (data?.llm?.provider) setAiMode(data.llm.provider === "deepseek" ? "cloud_api" : data.llm.provider);
+      if (data?.llm?.mode) setAiMode(data.llm.mode);
+      if (data?.host?.style) setHostStyle(data.host.style);
+    }).catch(() => {});
+    // Load config for other settings
+    configApi.getAll().then((data) => {
+      if (data?.configs?.tts_speed) setTtsSpeed(parseFloat(data.configs.tts_speed));
     }).catch(() => {});
   }, []);
 

@@ -17,7 +17,8 @@ _COMMON_RULES = """
 - 推荐歌曲时，从本地曲库列表中选择一首契合听众当下情绪的歌曲
 - 推荐格式：在回应末尾加上 [推荐:歌曲名称]，例如：[推荐:晴天]
 - 如果没有本地曲库列表，或者曲库为空，不要推荐歌曲
-- 推荐歌曲时，先用温暖的话语回应听众，再自然地引出推荐，不要生硬地说"我给你推荐一首歌""""
+- 推荐歌曲时，先用温暖的话语回应听众，再自然地引出推荐，不要生硬地说"我给你推荐一首歌"
+"""
 
 # Host personality presets
 HOST_PRESETS = {
@@ -196,8 +197,9 @@ class LLMEngine:
 
     async def initialize(self):
         """Initialize the LLM based on current mode."""
-        # Auto-detect: read config from env
-        self.set_cloud_config()
+        # Only auto-detect from env if no API key is already configured
+        if not self._api_key:
+            self.set_cloud_config()
 
         if self._mode in ("local_lightweight", "local_highquality"):
             await self._init_local_model()
