@@ -45,6 +45,8 @@ export const playlistApi = {
       method: "POST",
       body: new URLSearchParams({ directory: dir }),
     }),
+  deleteSong: (id: string) =>
+    request<any>(`/playlist/songs/${id}`, { method: "DELETE" }),
   browse: (path: string) =>
     request<{ current: string; parent: string | null; items: { name: string; path: string }[] }>(
       `/playlist/browse?path=${encodeURIComponent(path)}`

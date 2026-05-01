@@ -1,8 +1,9 @@
-import { X, Clock } from "lucide-react";
+import { X, Clock, Trash2 } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/utils";
 import { loadAndPlay } from "@/player";
+import { playlistApi } from "@/lib/api";
 
 export function QueuePanel() {
   const queue = usePlayerStore((s) => s.queue);
@@ -16,6 +17,23 @@ export function QueuePanel() {
 
   const handlePlaySong = (song: typeof queue[0]) => {
     loadAndPlay(song);
+  };
+
+  const handleDeleteSong = async (e: React.MouseEvent, song: typeof queue[0]) => {
+    e.stopPropagation();
+    try {
+      await playlistApi.deleteSong(song.id);
+      const store = usePlayerStore.getState();
+      const newQueue = store.queue.filter((s) => s.id !== song.id);
+      store.setQueue(newQueue);
+      // If deleting the current song, stop playback
+      if (currentSong?.id === song.id) {
+        const { stopPlayback } = await import("@/player");
+        stopPlayback();
+      }
+    } catch (err) {
+      console.error("删除歌曲失败:", err);
+    }
   };
 
   return (
@@ -45,11 +63,11 @@ export function QueuePanel() {
           queue.map((song, index) => {
             const isCurrent = currentSong?.id === song.id;
             return (
-              <button
+              <div
                 key={song.id}
                 onClick={() => handlePlaySong(song)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-5 py-3 border-b border-white/[0.03] text-left transition-all duration-200",
+                  "group w-full flex items-center gap-3 px-5 py-3 border-b border-white/[0.03] text-left transition-all duration-200 cursor-pointer",
                   isCurrent
                     ? "bg-neon-cyan/[0.05] border-l-2 border-l-neon-cyan"
                     : "hover:bg-white/[0.02] border-l-2 border-l-transparent active:bg-white/[0.04]"
@@ -82,11 +100,18 @@ export function QueuePanel() {
                   <p className="text-[11px] text-text-secondary truncate">{song.artist}</p>
                 </div>
 
-                {/* Duration */}
+                {/* Duration & Delete */}
                 <span className="font-mono text-[11px] text-text-secondary shrink-0">
                   {formatTime(song.duration)}
                 </span>
-              </button>
+                <button
+                  onClick={(e) => handleDeleteSong(e, song)}
+                  className="p-1 text-text-disabled hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                  title="删除"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })
         )}
