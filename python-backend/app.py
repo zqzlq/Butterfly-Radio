@@ -41,11 +41,17 @@ async def lifespan(app: FastAPI):
 
     # Initialize AI host engine
     from ai.host_engine import host_engine
+    from ai.llm_engine import llm_engine
     async with async_session() as db:
-        ai_mode = await dao.get_config(db, "ai_mode") or "local_lightweight"
+        ai_mode = await dao.get_config(db, "ai_mode") or "cloud_api"
         host_style = await dao.get_config(db, "host_style") or "warm"
         tts_speed = float(await dao.get_config(db, "tts_speed") or "1.0")
+        cloud_api_key = await dao.get_config(db, "cloud_api_key") or ""
+        cloud_api_provider = await dao.get_config(db, "cloud_api_provider") or "deepseek"
         host_engine.configure(ai_mode=ai_mode, host_style=host_style, tts_speed=tts_speed)
+        # Apply cloud API config from database
+        if cloud_api_key:
+            llm_engine.set_cloud_config(provider=cloud_api_provider, api_key=cloud_api_key)
     await host_engine.initialize()
     logger.info("AI Host engine initialized")
 

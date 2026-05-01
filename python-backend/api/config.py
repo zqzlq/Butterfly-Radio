@@ -9,7 +9,7 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 # Default configs
 DEFAULT_CONFIGS = {
-    "ai_mode": ("local_lightweight", "string", "AI mode: local_lightweight, local_highquality, cloud_api"),
+    "ai_mode": ("cloud_api", "string", "AI mode: cloud_api, local_lightweight (未完成), local_highquality (未完成)"),
     "llm_model": ("qwen3-1.7b-4bit", "string", "LLM model name"),
     "tts_model": ("chattts-light", "string", "TTS model name"),
     "tts_speed": ("1.0", "float", "TTS playback speed"),

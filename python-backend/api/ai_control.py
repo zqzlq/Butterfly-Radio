@@ -71,6 +71,7 @@ async def update_ai_config(data: AIConfigUpdate, db: AsyncSession = Depends(get_
         llm_engine.set_cloud_config(data.cloud_provider, data.cloud_api_key or "")
     if data.cloud_api_key:
         config_updates["cloud_api_key"] = data.cloud_api_key
+        llm_engine.set_cloud_config(api_key=data.cloud_api_key)
 
     # Save to DB
     for key, value in config_updates.items():

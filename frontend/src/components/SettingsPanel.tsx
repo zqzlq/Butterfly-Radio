@@ -15,9 +15,9 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 const AI_MODES = [
-  { key: "local_lightweight", label: "本地轻量模式", desc: "CPU 运行，8G 内存", icon: Cpu, recommended: true },
-  { key: "local_highquality", label: "本地高质量模式", desc: "GPU 加速，16G 内存 + 4G 显存", icon: Monitor },
-  { key: "cloud_api", label: "云 API 模式", desc: "无需本地算力，需联网", icon: Cloud },
+  { key: "cloud_api", label: "云 API 模式", desc: "无需本地算力，需联网", icon: Cloud, recommended: true },
+  { key: "local_lightweight", label: "本地轻量模式", desc: "CPU 运行，8G 内存（未完成开发）", icon: Cpu, disabled: true },
+  { key: "local_highquality", label: "本地高质量模式", desc: "GPU 加速，16G 内存 + 4G 显存（未完成开发）", icon: Monitor, disabled: true },
 ] as const;
 
 const HOST_STYLES = [
@@ -33,10 +33,12 @@ export function SettingsPanel() {
   const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
   const setStreamingEnabled = usePlayerStore((s) => s.setStreamingEnabled);
   const [activeTab, setActiveTab] = useState<TabKey>("ai");
-  const [aiMode, setAiMode] = useState("local_lightweight");
+  const [aiMode, setAiMode] = useState("cloud_api");
   const [hostStyle, setHostStyle] = useState("warm");
   const [ttsSpeed, setTtsSpeed] = useState(1.0);
   const [saving, setSaving] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeySaved, setApiKeySaved] = useState(false);
 
   // Music library state
   const [songCount, setSongCount] = useState(0);
@@ -46,6 +48,10 @@ export function SettingsPanel() {
 
   useEffect(() => {
     playlistApi.listSongs().then((songs) => setSongCount(songs.length)).catch(() => {});
+    // Load current AI config
+    aiApi.getHost().then((data) => {
+      if (data?.llm?.provider) setAiMode(data.llm.provider === "deepseek" ? "cloud_api" : data.llm.provider);
+    }).catch(() => {});
   }, []);
 
   const handleAiModeChange = async (mode: string) => {
@@ -78,6 +84,21 @@ export function SettingsPanel() {
       await aiApi.updateConfig({ tts_speed: speed });
     } catch (e) {
       console.error("保存语速失败:", e);
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    setApiKeySaved(false);
+    try {
+      await aiApi.updateConfig({ cloud_api_key: apiKey.trim() });
+      setApiKeySaved(true);
+      setTimeout(() => setApiKeySaved(false), 2000);
+    } catch (e) {
+      console.error("保存 API Key 失败:", e);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -182,15 +203,19 @@ export function SettingsPanel() {
               {AI_MODES.map((mode) => {
                 const Icon = mode.icon;
                 const selected = aiMode === mode.key;
+                const disabled = (mode as any).disabled;
                 return (
                   <button
                     key={mode.key}
-                    onClick={() => handleAiModeChange(mode.key)}
+                    onClick={() => !disabled && handleAiModeChange(mode.key)}
+                    disabled={disabled}
                     className={cn(
                       "w-full flex items-center gap-4 p-4 rounded-card border transition-all duration-200 text-left",
-                      selected
-                        ? "border-neon-cyan bg-neon-cyan/[0.05] shadow-neon"
-                        : "border-white/[0.06] hover:border-white/[0.12] bg-bg-card"
+                      disabled
+                        ? "opacity-40 cursor-not-allowed border-white/[0.04] bg-bg-card"
+                        : selected
+                          ? "border-neon-cyan bg-neon-cyan/[0.05] shadow-neon"
+                          : "border-white/[0.06] hover:border-white/[0.12] bg-bg-card"
                     )}
                   >
                     <div className={cn(
@@ -221,13 +246,27 @@ export function SettingsPanel() {
               {/* Cloud API key input (only visible in cloud mode) */}
               {aiMode === "cloud_api" && (
                 <div className="mt-4 p-4 rounded-card bg-bg-card border border-white/[0.06]">
-                  <label className="text-sm text-text-secondary block mb-2">API 密钥</label>
-                  <input
-                    type="password"
-                    placeholder="输入云 API 密钥"
-                    className="w-full h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
-                  />
-                  <p className="text-[10px] text-text-disabled mt-2">支持火山引擎豆包 / 阿里云通义千问</p>
+                  <label className="text-sm text-text-secondary block mb-2">DeepSeek API Key</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="输入 DeepSeek API Key"
+                      className="flex-1 h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                    />
+                    <button
+                      onClick={handleSaveApiKey}
+                      disabled={!apiKey.trim() || saving}
+                      className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all"
+                    >
+                      {saving ? "保存中..." : "保存"}
+                    </button>
+                  </div>
+                  {apiKeySaved && (
+                    <p className="text-xs text-neon-cyan mt-2">API Key 已保存</p>
+                  )}
+                  <p className="text-[10px] text-text-disabled mt-2">支持 DeepSeek、OpenAI 等兼容接口</p>
                 </div>
               )}
             </div>
