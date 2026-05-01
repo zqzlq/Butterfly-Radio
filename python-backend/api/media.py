@@ -2,8 +2,8 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_db
@@ -19,10 +19,19 @@ else:
 
 COMMENTARY_DIR = _temp_base / "commentary"
 
+MEDIA_TYPE_MAP = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    ".ogg": "audio/ogg",
+    ".m4a": "audio/mp4",
+}
+
 
 @router.get("/songs/{song_id}/stream")
-async def stream_song(song_id: str, db: AsyncSession = Depends(get_db)):
-    """Stream an audio file for playback. Supports HTTP range requests for seeking."""
+async def stream_song(request: Request, song_id: str, db: AsyncSession = Depends(get_db)):
+    """Stream an audio file with full HTTP range request support for seeking."""
     song = await dao.get_song(db, song_id)
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -31,23 +40,72 @@ async def stream_song(song_id: str, db: AsyncSession = Depends(get_db)):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found on disk")
 
-    media_type_map = {
-        ".mp3": "audio/mpeg",
-        ".wav": "audio/wav",
-        ".flac": "audio/flac",
-        ".aac": "audio/aac",
-        ".ogg": "audio/ogg",
-        ".m4a": "audio/mp4",
-    }
-    media_type = media_type_map.get(file_path.suffix.lower(), "application/octet-stream")
+    file_size = file_path.stat().st_size
+    media_type = MEDIA_TYPE_MAP.get(file_path.suffix.lower(), "application/octet-stream")
+    range_header = request.headers.get("range")
 
-    response = FileResponse(
-        path=str(file_path),
+    if range_header:
+        # Parse "bytes=start-end"
+        try:
+            ranges = range_header.replace("bytes=", "").split("-")
+            start = int(ranges[0])
+            end = int(ranges[1]) if ranges[1] else file_size - 1
+        except (ValueError, IndexError):
+            start, end = 0, file_size - 1
+
+        end = min(end, file_size - 1)
+        if start > end or start >= file_size:
+            return Response(
+                status_code=416,
+                headers={
+                    "Content-Range": f"bytes */{file_size}",
+                    "Accept-Ranges": "bytes",
+                },
+            )
+
+        content_length = end - start + 1
+
+        def iter_range():
+            with open(file_path, "rb") as f:
+                f.seek(start)
+                remaining = content_length
+                chunk_size = 64 * 1024  # 64KB chunks
+                while remaining > 0:
+                    read_size = min(chunk_size, remaining)
+                    data = f.read(read_size)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        return StreamingResponse(
+            iter_range(),
+            status_code=206,
+            media_type=media_type,
+            headers={
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(content_length),
+            },
+        )
+
+    # No range header — serve entire file
+    def iter_file():
+        with open(file_path, "rb") as f:
+            while True:
+                data = f.read(64 * 1024)
+                if not data:
+                    break
+                yield data
+
+    return StreamingResponse(
+        iter_file(),
         media_type=media_type,
-        filename=f"{song.title}{file_path.suffix}",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+        },
     )
-    response.headers["Accept-Ranges"] = "bytes"
-    return response
 
 
 @router.get("/songs/{song_id}/cover")
