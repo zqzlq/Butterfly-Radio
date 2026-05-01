@@ -152,7 +152,8 @@ function startProgressSync() {
   stopProgressSync();
   progressTimer = setInterval(() => {
     if (currentHowl && currentHowl.playing()) {
-      const time = currentHowl.seek() as number;
+      const node = getAudioNode();
+      const time = node ? node.currentTime : (currentHowl.seek() as number);
       if (typeof time === "number" && isFinite(time)) {
         usePlayerStore.getState().setCurrentTime(time);
       }
@@ -241,13 +242,31 @@ export function skipPrev(): void {
 }
 
 /**
+ * Get the underlying HTML audio element from Howler.
+ */
+function getAudioNode(): HTMLAudioElement | null {
+  if (!currentHowl) return null;
+  try {
+    // @ts-ignore — Howler internal: _sounds[0]._node is the <audio> element
+    return currentHowl._sounds?.[0]?._node ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Seek to position (in seconds).
+ * Uses the raw <audio> element for reliable seeking in HTML5 mode.
  */
 export function seekTo(seconds: number): void {
-  if (currentHowl) {
+  if (!currentHowl) return;
+  const node = getAudioNode();
+  if (node) {
+    node.currentTime = seconds;
+  } else {
     currentHowl.seek(seconds);
-    usePlayerStore.getState().setCurrentTime(seconds);
   }
+  usePlayerStore.getState().setCurrentTime(seconds);
 }
 
 /**
@@ -275,14 +294,16 @@ export function toggleMute(): void {
  * Get total duration of current song.
  */
 export function getDuration(): number {
-  return currentHowl?.duration() ?? 0;
+  const node = getAudioNode();
+  return node?.duration || currentHowl?.duration() || 0;
 }
 
 /**
  * Get current playback position.
  */
 export function getCurrentTime(): number {
-  return (currentHowl?.seek() as number) ?? 0;
+  const node = getAudioNode();
+  return node?.currentTime || (currentHowl?.seek() as number) || 0;
 }
 
 /**
