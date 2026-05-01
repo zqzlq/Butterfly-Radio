@@ -1,7 +1,8 @@
+import { Howl } from "howler";
 import { usePlayerStore, type Song } from "@/store";
 import { getMediaUrl } from "@/lib/api";
 
-let audioEl: HTMLAudioElement | null = null;
+let currentHowl: Howl | null = null;
 let analyserNode: AnalyserNode | null = null;
 let audioContext: AudioContext | null = null;
 
@@ -42,45 +43,48 @@ export function getFrequencyData(): Uint8Array {
 export function loadAndPlay(song: Song): void {
   const store = usePlayerStore.getState();
 
-  // Clean up previous
-  if (audioEl) {
-    audioEl.pause();
-    audioEl.removeAttribute("src");
-    audioEl.load();
-    audioEl = null;
+  // Unload previous
+  if (currentHowl) {
+    currentHowl.unload();
+    currentHowl = null;
   }
 
-  audioEl = new Audio();
-  audioEl.preload = "auto";
-  audioEl.volume = store.isMuted ? 0 : store.volume;
-
   const src = getMediaUrl(song.id);
-  audioEl.src = src;
 
-  // Events
-  audioEl.addEventListener("play", () => {
-    usePlayerStore.getState().setPlaying(true);
-    updateMediaSession(song);
-  });
+  currentHowl = new Howl({
+    src: [src],
+    html5: true,
+    volume: store.isMuted ? 0 : store.volume,
+    onplay: () => {
+      usePlayerStore.getState().setPlaying(true);
 
-  audioEl.addEventListener("pause", () => {
-    usePlayerStore.getState().setPlaying(false);
-  });
+      // Resume AudioContext if suspended (browser autoplay policy)
+      try {
+        const { ctx } = ensureAudioContext();
+        if (ctx.state === "suspended") {
+          ctx.resume();
+        }
+      } catch {
+        // Ignore — visualization will just show breathing animation
+      }
 
-  audioEl.addEventListener("ended", () => {
-    usePlayerStore.getState().setPlaying(false);
-    advanceToNext();
-  });
-
-  audioEl.addEventListener("loadedmetadata", () => {
-    // Update duration from actual audio file
-    if (audioEl && isFinite(audioEl.duration)) {
-      usePlayerStore.getState().setDuration(audioEl.duration);
-    }
-  });
-
-  audioEl.addEventListener("error", (e) => {
-    console.error("[Player] 音频加载失败:", e);
+      // Update Media Session metadata
+      updateMediaSession(song);
+    },
+    onpause: () => {
+      usePlayerStore.getState().setPlaying(false);
+    },
+    onend: () => {
+      usePlayerStore.getState().setPlaying(false);
+      // Auto-advance to next song
+      advanceToNext();
+    },
+    onloaderror: (_id, err) => {
+      console.error("[Player] 加载失败:", err);
+    },
+    onplayerror: (_id, err) => {
+      console.error("[Player] 播放失败:", err);
+    },
   });
 
   // Update store
@@ -88,22 +92,7 @@ export function loadAndPlay(song: Song): void {
   store.setDuration(song.duration);
 
   // Play
-  const playPromise = audioEl.play();
-  if (playPromise) {
-    playPromise.catch((err) => {
-      console.warn("[Player] 自动播放被阻止:", err);
-    });
-  }
-
-  // Resume AudioContext if suspended
-  try {
-    const { ctx } = ensureAudioContext();
-    if (ctx.state === "suspended") {
-      ctx.resume();
-    }
-  } catch {
-    // Ignore
-  }
+  currentHowl.play();
 
   // Start progress tracking
   startProgressSync();
@@ -153,7 +142,7 @@ function syncMediaSessionState(): void {
       position: getCurrentTime(),
     });
   } catch {
-    // Ignore
+    // Ignore if duration is not available yet
   }
 }
 
@@ -162,8 +151,9 @@ let progressTimer: ReturnType<typeof setInterval> | null = null;
 function startProgressSync() {
   stopProgressSync();
   progressTimer = setInterval(() => {
-    if (audioEl && !audioEl.paused) {
-      const time = audioEl.currentTime;
+    if (currentHowl && currentHowl.playing()) {
+      const node = getAudioNode();
+      const time = node ? node.currentTime : (currentHowl.seek() as number);
       if (typeof time === "number" && isFinite(time)) {
         usePlayerStore.getState().setCurrentTime(time);
       }
@@ -193,11 +183,11 @@ function advanceToNext() {
  * Toggle play/pause.
  */
 export function togglePlay(): void {
-  if (!audioEl) return;
-  if (audioEl.paused) {
-    audioEl.play().catch(() => {});
+  if (!currentHowl) return;
+  if (currentHowl.playing()) {
+    currentHowl.pause();
   } else {
-    audioEl.pause();
+    currentHowl.play();
   }
 }
 
@@ -205,14 +195,14 @@ export function togglePlay(): void {
  * Pause playback.
  */
 export function pausePlayback(): void {
-  audioEl?.pause();
+  currentHowl?.pause();
 }
 
 /**
  * Resume playback.
  */
 export function resumePlayback(): void {
-  audioEl?.play().catch(() => {});
+  currentHowl?.play();
 }
 
 /**
@@ -220,12 +210,9 @@ export function resumePlayback(): void {
  */
 export function stopPlayback(): void {
   stopProgressSync();
-  if (audioEl) {
-    audioEl.pause();
-    audioEl.removeAttribute("src");
-    audioEl.load();
-    audioEl = null;
-  }
+  currentHowl?.stop();
+  currentHowl?.unload();
+  currentHowl = null;
   usePlayerStore.getState().setPlaying(false);
   usePlayerStore.getState().setCurrentTime(0);
 }
@@ -255,12 +242,42 @@ export function skipPrev(): void {
 }
 
 /**
+ * Get the underlying HTML audio element from Howler.
+ * In html5 mode, Howler stores the <audio> element at _sounds[0]._node.
+ */
+function getAudioNode(): HTMLAudioElement | null {
+  if (!currentHowl) return null;
+  try {
+    // @ts-ignore — Howler internal: _sounds[0]._node is the <audio> element
+    const node = currentHowl._sounds?.[0]?._node;
+    if (node instanceof HTMLAudioElement) return node;
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
  * Seek to position (in seconds).
+ * Bypasses Howler's seek() to avoid the pause→play restart bug in HTML5 mode.
+ * Howler skips `node.currentTime = seek` when `isNaN(node.duration)`,
+ * then does pause() + play() which restarts the song from the beginning.
  */
 export function seekTo(seconds: number): void {
-  if (!audioEl) return;
-  audioEl.currentTime = seconds;
-  usePlayerStore.getState().setCurrentTime(seconds);
+  if (!currentHowl) return;
+  const clamped = Math.max(0, seconds);
+  const node = getAudioNode();
+
+  if (node) {
+    // Directly set currentTime on the <audio> element — always works
+    node.currentTime = clamped;
+  }
+
+  // Keep Howler's internal seek state in sync
+  try {
+    // @ts-ignore — update Howler's internal position so it doesn't drift
+    if (currentHowl._sounds?.[0]) currentHowl._sounds[0]._seek = clamped;
+  } catch { /* ignore */ }
+
+  usePlayerStore.getState().setCurrentTime(clamped);
 }
 
 /**
@@ -268,8 +285,8 @@ export function seekTo(seconds: number): void {
  */
 export function setVolume(vol: number): void {
   usePlayerStore.getState().setVolume(vol);
-  if (audioEl) {
-    audioEl.volume = usePlayerStore.getState().isMuted ? 0 : vol;
+  if (currentHowl) {
+    currentHowl.volume(usePlayerStore.getState().isMuted ? 0 : vol);
   }
 }
 
@@ -279,8 +296,8 @@ export function setVolume(vol: number): void {
 export function toggleMute(): void {
   const store = usePlayerStore.getState();
   store.toggleMute();
-  if (audioEl) {
-    audioEl.volume = store.isMuted ? 0 : store.volume;
+  if (currentHowl) {
+    currentHowl.volume(store.isMuted ? 0 : store.volume);
   }
 }
 
@@ -288,20 +305,21 @@ export function toggleMute(): void {
  * Get total duration of current song.
  */
 export function getDuration(): number {
-  if (audioEl && isFinite(audioEl.duration)) return audioEl.duration;
-  return usePlayerStore.getState().duration || 0;
+  const node = getAudioNode();
+  return node?.duration || currentHowl?.duration() || 0;
 }
 
 /**
  * Get current playback position.
  */
 export function getCurrentTime(): number {
-  return audioEl?.currentTime || 0;
+  const node = getAudioNode();
+  return node?.currentTime || (currentHowl?.seek() as number) || 0;
 }
 
 /**
  * Check if currently playing.
  */
 export function isPlaying(): boolean {
-  return audioEl ? !audioEl.paused : false;
+  return currentHowl?.playing() ?? false;
 }
