@@ -3,6 +3,9 @@ import { usePlayerStore, type Song } from "@/store";
 import { getMediaUrl } from "@/lib/api";
 
 let currentHowl: Howl | null = null;
+let pendingSeek: number | null = null;
+let pendingSeekNode: HTMLAudioElement | null = null;
+let pendingSeekHandler: (() => void) | null = null;
 let analyserNode: AnalyserNode | null = null;
 let audioContext: AudioContext | null = null;
 
@@ -42,6 +45,9 @@ export function getFrequencyData(): Uint8Array {
  */
 export function loadAndPlay(song: Song): void {
   const store = usePlayerStore.getState();
+
+  // Cancel any pending seek from previous song
+  cancelPendingSeek();
 
   // Unload previous
   if (currentHowl) {
@@ -256,18 +262,46 @@ function getAudioNode(): HTMLAudioElement | null {
 }
 
 /**
+ * Cancel any pending seek that's waiting for metadata to load.
+ */
+function cancelPendingSeek() {
+  if (pendingSeekNode && pendingSeekHandler) {
+    pendingSeekNode.removeEventListener("loadedmetadata", pendingSeekHandler);
+  }
+  pendingSeek = null;
+  pendingSeekNode = null;
+  pendingSeekHandler = null;
+}
+
+/**
  * Seek to position (in seconds).
  * Bypasses Howler's seek() to avoid the pause→play restart bug in HTML5 mode.
- * Howler skips `node.currentTime = seek` when `isNaN(node.duration)`,
- * then does pause() + play() which restarts the song from the beginning.
+ * If the audio element hasn't loaded metadata yet, the seek is deferred.
  */
 export function seekTo(seconds: number): void {
   if (!currentHowl) return;
+  cancelPendingSeek();
+
   const clamped = Math.max(0, seconds);
   const node = getAudioNode();
 
   if (node) {
-    node.currentTime = clamped;
+    if (node.readyState >= 1) {
+      // HAVE_METADATA or higher — safe to seek immediately
+      node.currentTime = clamped;
+    } else {
+      // Metadata not loaded yet — defer seek until it's ready
+      pendingSeek = clamped;
+      pendingSeekNode = node;
+      const handler = () => {
+        if (pendingSeekNode === node && pendingSeek !== null) {
+          node.currentTime = pendingSeek;
+        }
+        cancelPendingSeek();
+      };
+      pendingSeekHandler = handler;
+      node.addEventListener("loadedmetadata", handler, { once: true });
+    }
   }
 
   usePlayerStore.getState().setCurrentTime(clamped);

@@ -22,7 +22,7 @@ COMMENTARY_DIR = _temp_base / "commentary"
 
 @router.get("/songs/{song_id}/stream")
 async def stream_song(song_id: str, db: AsyncSession = Depends(get_db)):
-    """Stream an audio file for playback."""
+    """Stream an audio file for playback. Supports HTTP range requests for seeking."""
     song = await dao.get_song(db, song_id)
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -41,11 +41,13 @@ async def stream_song(song_id: str, db: AsyncSession = Depends(get_db)):
     }
     media_type = media_type_map.get(file_path.suffix.lower(), "application/octet-stream")
 
-    return FileResponse(
+    response = FileResponse(
         path=str(file_path),
         media_type=media_type,
         filename=f"{song.title}{file_path.suffix}",
     )
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
 
 
 @router.get("/songs/{song_id}/cover")
