@@ -86,9 +86,14 @@ export function loadAndPlay(song: Song): void {
 
   const src = getMediaUrl(song.id);
 
+  // Extract format from file path (e.g. "D:/music/song.mp3" -> ["mp3"])
+  const ext = song.file_path?.split(".").pop()?.toLowerCase();
+  const formats = ext ? [ext] : undefined;
+
   currentHowl = new Howl({
     src: [src],
     html5: true,
+    format: formats,
     volume: store.isMuted ? 0 : store.volume,
     onplay: () => {
       usePlayerStore.getState().setPlaying(true);
