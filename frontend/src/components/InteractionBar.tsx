@@ -1,8 +1,21 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, useRef, useEffect, type KeyboardEvent } from "react";
 import { Send, Music, Mic, Download } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { interactionApi, aiApi, playlistApi } from "@/lib/api";
 import { loadAndPlay } from "@/player";
+
+// Web Speech API type declarations
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+const SpeechRecognitionAPI =
+  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
 /** Keywords that indicate a song request in natural language */
 const SONG_REQUEST_PATTERNS = [
@@ -113,10 +126,100 @@ export function InteractionBar() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const addInteraction = usePlayerStore((s) => s.addInteraction);
   const addCommentary = usePlayerStore((s) => s.addCommentary);
   const queue = usePlayerStore((s) => s.queue);
   const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!SpeechRecognitionAPI) {
+      addCommentary({
+        id: Date.now().toString(),
+        content: "当前浏览器不支持语音输入，请使用 Chrome 或 Edge 浏览器。",
+        context: "system",
+        host_name: usePlayerStore.getState().hostName,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    // If already listening, stop
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+
+    // Create new recognition instance
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = "zh-CN";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setInput("");
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = "";
+      let finalTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Show interim results in input
+      setInput(finalTranscript || interimTranscript);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+      // Auto-send if we have final text
+      const text = input.trim();
+      if (text) {
+        // Use setTimeout to ensure state is updated
+        setTimeout(() => handleSend(), 100);
+      }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+      recognitionRef.current = null;
+
+      if (event.error === "not-allowed") {
+        addCommentary({
+          id: Date.now().toString(),
+          content: "麦克风权限被拒绝，请在浏览器设置中允许麦克风访问。",
+          context: "system",
+          host_name: usePlayerStore.getState().hostName,
+          timestamp: Date.now(),
+        });
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
 
   const handleDownloadAndPlay = async (track: any) => {
     setDownloading(track.track_id);
@@ -293,7 +396,7 @@ export function InteractionBar() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder='说点什么... 或输入 /点歌 歌名'
+          placeholder={isListening ? "正在聆听..." : "说点什么... 或输入 /点歌 歌名"}
           className="w-full h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan focus:shadow-neon-glow outline-none transition-all duration-200"
         />
         {/* Command hint */}
@@ -324,12 +427,19 @@ export function InteractionBar() {
       </button>
 
       {/* Voice */}
-      <button
-        className="w-8 h-8 rounded-full bg-neon-pink flex items-center justify-center text-white hover:shadow-[0_0_12px_rgba(255,0,110,0.3)] active:scale-95 transition-all duration-200"
-        title="语音输入"
-      >
-        <Mic className="w-3.5 h-3.5" />
-      </button>
+      {SpeechRecognitionAPI && (
+        <button
+          onClick={toggleVoiceInput}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-white active:scale-95 transition-all duration-200 ${
+            isListening
+              ? "bg-red-500 animate-pulse shadow-[0_0_16px_rgba(239,68,68,0.5)]"
+              : "bg-neon-pink hover:shadow-[0_0_12px_rgba(255,0,110,0.3)]"
+          }`}
+          title={isListening ? "停止录音" : "语音输入"}
+        >
+          <Mic className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
