@@ -15,6 +15,9 @@ export interface ElectronAPI {
   getAppVersion: () => Promise<string>;
   getPlatform: () => Promise<string>;
 
+  // Dialog
+  openDirectoryDialog: () => Promise<string | null>;
+
   // Events
   onBackendReady: (callback: (data: { port: number }) => void) => () => void;
 }
@@ -33,6 +36,9 @@ const electronAPI: ElectronAPI = {
   // App info
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   getPlatform: () => ipcRenderer.invoke("get-platform"),
+
+  // Dialog
+  openDirectoryDialog: () => ipcRenderer.invoke("open-directory-dialog"),
 
   // Events
   onBackendReady: (callback) => {

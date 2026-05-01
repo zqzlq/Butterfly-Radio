@@ -270,3 +270,12 @@ ipcMain.handle("restart-backend", async () => {
   await new Promise((r) => setTimeout(r, 1000));
   return startPythonBackend();
 });
+
+ipcMain.handle("open-directory-dialog", async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ["openDirectory"],
+    title: "选择音乐文件夹",
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});

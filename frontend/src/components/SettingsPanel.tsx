@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
-import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw, FileAudio } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
 import { aiApi, playlistApi } from "@/lib/api";
+import { isElectron } from "@/lib/electron";
 
 const TABS = [
   { key: "ai", label: "AI 模式" },
@@ -81,8 +82,10 @@ export function SettingsPanel() {
     }
   };
 
-  const handleImport = async () => {
-    const dir = importDir.trim();
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const doImport = async (dir: string) => {
     if (!dir || importing) return;
     setImporting(true);
     setImportResult(null);
@@ -99,6 +102,70 @@ export function SettingsPanel() {
     } finally {
       setImporting(false);
     }
+  };
+
+  const handleImport = () => doImport(importDir.trim());
+
+  const handleFolderSelect = async () => {
+    if (isElectron()) {
+      const api = window.electronAPI as any;
+      if (api?.openDirectoryDialog) {
+        const result = await api.openDirectoryDialog();
+        if (result) doImport(result);
+        return;
+      }
+    }
+    folderInputRef.current?.click();
+  };
+
+  const handleFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // Extract directory path from the first file
+      const fullPath = files[0].webkitRelativePath || files[0].name;
+      const relativePath = fullPath.split("/")[0];
+      // Use the actual path if available (Electron/Chrome)
+      const filePath = (files[0] as any).path;
+      if (filePath) {
+        const dir = filePath.replace(/[/\\][^/\\]+$/, "");
+        doImport(dir);
+      } else {
+        setImportDir(relativePath);
+      }
+    }
+    e.target.value = "";
+  };
+
+  const onFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      let totalImported = 0;
+      const store = usePlayerStore.getState();
+      for (const file of Array.from(files)) {
+        const filePath = (file as any).path;
+        if (filePath) {
+          const dir = filePath.replace(/[/\\][^/\\]+$/, "");
+          const songs = await playlistApi.importDir(dir);
+          totalImported += songs.length;
+        }
+      }
+      const allSongs = await playlistApi.listSongs();
+      store.setQueue(allSongs);
+      setSongCount(allSongs.length);
+      setImportResult(`成功导入 ${totalImported} 首歌曲`);
+    } catch (e: any) {
+      setImportResult(`导入失败: ${e.message}`);
+    } finally {
+      setImporting(false);
+    }
+    e.target.value = "";
   };
 
   return (
@@ -275,10 +342,49 @@ export function SettingsPanel() {
                     disabled={!importDir.trim() || importing}
                     className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all flex items-center gap-1.5"
                   >
-                    <FolderOpen className="w-3.5 h-3.5" />
                     {importing ? "导入中..." : "导入"}
                   </button>
                 </div>
+
+                {/* Browse buttons */}
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={handleFolderSelect}
+                    disabled={importing}
+                    className="flex-1 h-9 rounded-input border border-white/[0.06] bg-bg-card text-sm text-text-secondary hover:text-text-primary hover:border-neon-purple/30 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    选择文件夹
+                  </button>
+                  <button
+                    onClick={handleFileSelect}
+                    disabled={importing}
+                    className="flex-1 h-9 rounded-input border border-white/[0.06] bg-bg-card text-sm text-text-secondary hover:text-text-primary hover:border-neon-purple/30 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <FileAudio className="w-3.5 h-3.5" />
+                    选择文件
+                  </button>
+                </div>
+
+                {/* Hidden file inputs */}
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  // @ts-ignore
+                  webkitdirectory=""
+                  directory=""
+                  multiple
+                  className="hidden"
+                  onChange={onFolderInputChange}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".mp3,.wav,.flac,.aac,.ogg,.m4a"
+                  multiple
+                  className="hidden"
+                  onChange={onFileInputChange}
+                />
                 {importResult && (
                   <p className={cn(
                     "text-xs mt-2",
