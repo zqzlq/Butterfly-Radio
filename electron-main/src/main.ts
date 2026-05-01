@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut } from "electron";
 import path from "path";
 import { spawn, ChildProcess } from "child_process";
 import http from "http";
@@ -217,6 +217,24 @@ app.whenReady().then(async () => {
   // Notify renderer that backend is ready
   mainWindow?.webContents.send("backend-ready", { port: PYTHON_PORT });
 
+  // Register global shortcuts for voice input (works when app is in background)
+  // Alt+V: Toggle voice input
+  globalShortcut.register("Alt+V", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.webContents.send("global-voice", "toggle");
+    }
+  });
+
+  // Alt+Shift+V: Push-to-talk (hold to record)
+  // Note: globalShortcut doesn't support keyup, so we use toggle mode
+  globalShortcut.register("Alt+Shift+V", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.webContents.send("global-voice", "toggle");
+    }
+  });
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -228,6 +246,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  globalShortcut.unregisterAll();
   stopPythonBackend();
 });
 

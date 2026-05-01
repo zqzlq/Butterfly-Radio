@@ -151,20 +151,18 @@ export function InteractionBar() {
     };
   }, []);
 
-  // Push-to-talk: hold Space key (only when input is not focused)
+  // Push-to-talk: hold V key (only when input is not focused)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger when typing in input or other elements
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.code === "Space" && !e.repeat && !isListening) {
-        e.preventDefault();
+      if (e.code === "KeyV" && !e.repeat && !isListening) {
         isPTTRef.current = true;
         startListening();
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space" && isPTTRef.current && isListening) {
-        e.preventDefault();
+      if (e.code === "KeyV" && isPTTRef.current && isListening) {
         isPTTRef.current = false;
         stopListening();
       }
@@ -174,6 +172,26 @@ export function InteractionBar() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [isListening]);
+
+  // Listen for global shortcut from Electron (when app is in background)
+  useEffect(() => {
+    const handleGlobalVoice = (_event: any, action: string) => {
+      if (action === "start") {
+        isPTTRef.current = false;
+        startListening();
+      } else if (action === "stop") {
+        stopListening();
+      } else if (action === "toggle") {
+        toggleVoiceInput();
+      }
+    };
+    // @ts-ignore — Electron IPC
+    window.electronAPI?.onGlobalVoice?.(handleGlobalVoice);
+    return () => {
+      // @ts-ignore
+      window.electronAPI?.removeGlobalVoiceListener?.();
     };
   }, [isListening]);
 
@@ -455,7 +473,7 @@ export function InteractionBar() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? "正在聆听..." : "说点什么... 或输入 /点歌 歌名"}
+          placeholder={isListening ? "正在聆听..." : "说点什么... (按住 V 说话，Alt+V 全局语音)"}
           className="w-full h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan focus:shadow-neon-glow outline-none transition-all duration-200"
         />
         {/* Command hint */}

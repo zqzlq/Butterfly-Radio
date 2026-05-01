@@ -20,6 +20,8 @@ export interface ElectronAPI {
 
   // Events
   onBackendReady: (callback: (data: { port: number }) => void) => () => void;
+  onGlobalVoice: (callback: (event: any, action: string) => void) => void;
+  removeGlobalVoiceListener: () => void;
 }
 
 const electronAPI: ElectronAPI = {
@@ -45,6 +47,12 @@ const electronAPI: ElectronAPI = {
     const handler = (_event: any, data: { port: number }) => callback(data);
     ipcRenderer.on("backend-ready", handler);
     return () => ipcRenderer.removeListener("backend-ready", handler);
+  },
+  onGlobalVoice: (callback) => {
+    ipcRenderer.on("global-voice", callback);
+  },
+  removeGlobalVoiceListener: () => {
+    ipcRenderer.removeAllListeners("global-voice");
   },
 };
 
