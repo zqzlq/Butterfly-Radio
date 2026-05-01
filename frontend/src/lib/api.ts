@@ -85,11 +85,19 @@ export const aiApi = {
 
 // ─── Media ───
 
+// In dev mode, use relative URLs so Vite proxy handles them (same-origin, no CORS).
+// In production (Electron), use absolute URL to the backend.
+function isDev(): boolean {
+  return import.meta.env?.DEV ?? false;
+}
+
 export function getMediaUrl(songId: string): string {
+  if (isDev()) return `/api/media/songs/${songId}/stream`;
   return `${BASE_URL.replace("/api", "")}/api/media/songs/${songId}/stream`;
 }
 
 export function getTtsAudioUrl(filename: string): string {
+  if (isDev()) return `/api/media/tts/${filename}`;
   return `${BASE_URL.replace("/api", "")}/api/media/tts/${filename}`;
 }
 
