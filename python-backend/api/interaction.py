@@ -51,12 +51,8 @@ async def send_interaction(data: InteractionCreate, db: AsyncSession = Depends(g
                 "host_name": llm_engine.get_host_info()["name"],
             })
     elif data.interaction_type == "message":
-        # Generate AI commentary for regular messages
-        from ai.host_engine import host_engine
-        user = await dao.get_or_create_default_user(db)
-        result = await host_engine.handle_user_message(user.nickname, data.content)
-        if result:
-            await dao.mark_interaction_processed(db, interaction.id, result["content"])
+        # AI commentary is handled by frontend via /api/ai/commentary (streaming)
+        pass
 
     return interaction
 
