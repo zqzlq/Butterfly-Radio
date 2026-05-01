@@ -1,8 +1,34 @@
 import { io, Socket } from "socket.io-client";
 import { usePlayerStore, type Song, type AiCommentary } from "@/store";
 import { getTtsAudioUrl } from "@/lib/api";
+import { loadAndPlay } from "@/player";
 
 const SOCKET_URL = "http://127.0.0.1:3000";
+
+/**
+ * Parse AI commentary for song recommendation marker and play if found.
+ * Format: [推荐: song_title]
+ */
+function parseAndPlayRecommendation(content: string): void {
+  const match = content.match(/\[推荐[:：]\s*(.+?)\]/);
+  if (!match?.[1]) return;
+
+  const songName = match[1].trim();
+  if (!songName) return;
+
+  const queue = usePlayerStore.getState().queue;
+  // Try exact match first, then partial match
+  const found = queue.find((s) => s.title === songName) ||
+                queue.find((s) => s.title.includes(songName)) ||
+                queue.find((s) => songName.includes(s.title));
+
+  if (found) {
+    console.log(`[AI推荐] 为你播放: ${found.title}`);
+    loadAndPlay(found);
+  } else {
+    console.log(`[AI推荐] 未找到歌曲: ${songName}`);
+  }
+}
 
 let socket: Socket | null = null;
 // Track commentary IDs that have already been created to prevent duplicates
@@ -83,6 +109,10 @@ export function getSocket(): Socket {
         replay: data.replay,
       };
       store().addCommentary(commentary);
+      // Parse for song recommendation
+      if (data.content) {
+        parseAndPlayRecommendation(data.content);
+      }
       // Play TTS audio if available
       if (data.audio_path) {
         const filename = data.audio_path.split(/[/\\]/).pop();
@@ -125,6 +155,10 @@ export function getSocket(): Socket {
       } else if (type === "done") {
         // Finalize the streaming bubble
         store().finishStreamingCommentary(id, content);
+        // Parse for song recommendation
+        if (content) {
+          parseAndPlayRecommendation(content);
+        }
         // Play TTS audio if available
         if (data.audio_path) {
           const filename = data.audio_path.split(/[/\\]/).pop();

@@ -9,7 +9,15 @@ _COMMON_RULES = """
 - 只输出纯口播文字，不要输出任何动作、情绪、表情描述
 - 禁止使用括号描述动作或情绪，如（轻笑着）（微笑着）（叹了口气）（温柔地说）等
 - 禁止使用 *动作* 或 [动作] 等任何形式的动作标注
-- 你是在对听众说话，不是在写剧本，不需要舞台指示"""
+- 你是在对听众说话，不是在写剧本，不需要舞台指示
+
+歌曲推荐规则（仅限 chat_response 场景）：
+- 仔细感知听众的情绪状态，从文字中判断是否情绪低落、焦虑、疲惫、孤独或难过
+- 只有当听众明显情绪不好时，才推荐歌曲。普通聊天、打招呼、闲聊、问问题时不要推荐
+- 推荐歌曲时，从本地曲库列表中选择一首契合听众当下情绪的歌曲
+- 推荐格式：在回应末尾加上 [推荐:歌曲名称]，例如：[推荐:晴天]
+- 如果没有本地曲库列表，或者曲库为空，不要推荐歌曲
+- 推荐歌曲时，先用温暖的话语回应听众，再自然地引出推荐，不要生硬地说"我给你推荐一首歌""""
 
 # Host personality presets
 HOST_PRESETS = {
@@ -97,19 +105,7 @@ COMMENTARY_TEMPLATES = {
     "song_review": "请为刚播放完的歌曲写一段简短的点评。歌曲信息：{song_info}。",
     "song_request": "听众「{user}」点了一首歌：{song_name}。请写一段口播回应这个点歌请求。",
     "greeting": "现在是{time}，请写一段开场问候语，欢迎听众收听。",
-    "chat_response": "听众「{user}」说：「{message}」。请以电台主播的身份简短回应。",
-    "song_recommend": """听众说：「{message}」
-
-当前曲库歌曲列表：
-{song_list}
-
-请根据听众的情绪和状态，从曲库中挑选一首最合适的歌曲推荐给他/她。
-
-输出格式要求：
-1. 先写一段简短的口播回应（1-3句话），表达你对听众情绪的理解和关怀
-2. 然后推荐一首歌，在口播末尾用 [推荐:歌名] 标记，歌名必须是曲库中歌曲的完整标题
-3. 如果曲库中没有特别合适的歌，就不加推荐标记，只做普通回应
-4. 不要列出所有歌曲，只推荐最合适的一首""",
+    "chat_response": "听众「{user}」说：「{message}」。请以电台主播的身份简短回应。\n\n本地曲库歌曲列表：\n{song_queue}",
 }
 
 
@@ -240,17 +236,24 @@ class LLMEngine:
         song_info: dict = None,
         user_message: str = None,
         user_name: str = "听众",
-        song_list: str = "",
+        song_queue: list = None,
     ) -> str:
         """
         Generate AI host commentary.
-        context: one of song_intro, song_review, song_request, greeting, chat_response, song_recommend
+        context: one of song_intro, song_review, song_request, greeting, chat_response
         """
         system_prompt = self._get_system_prompt()
 
         # Build user prompt from template
         from datetime import datetime
         now = datetime.now().strftime("%H:%M")
+
+        # Format song queue for the prompt
+        queue_text = ""
+        if song_queue:
+            queue_text = "\n".join(f"- {s['title']} - {s['artist']}" for s in song_queue[:50])
+        else:
+            queue_text = "（无歌曲）"
 
         template = COMMENTARY_TEMPLATES.get(context, "")
         user_prompt = template.format(
@@ -259,7 +262,7 @@ class LLMEngine:
             user=user_name,
             message=user_message or "",
             song_name=song_info.get("title", "") if song_info else "",
-            song_list=song_list,
+            song_queue=queue_text,
         )
 
         # Try cloud API first if key is configured
@@ -334,7 +337,7 @@ class LLMEngine:
         song_info: dict = None,
         user_message: str = None,
         user_name: str = "听众",
-        song_list: str = "",
+        song_queue: list = None,
     ):
         """
         Stream AI commentary token by token.
@@ -345,6 +348,13 @@ class LLMEngine:
         from datetime import datetime
         now = datetime.now().strftime("%H:%M")
 
+        # Format song queue for the prompt
+        queue_text = ""
+        if song_queue:
+            queue_text = "\n".join(f"- {s['title']} - {s['artist']}" for s in song_queue[:50])
+        else:
+            queue_text = "（无歌曲）"
+
         template = COMMENTARY_TEMPLATES.get(context, "")
         user_prompt = template.format(
             song_info=json.dumps(song_info, ensure_ascii=False) if song_info else "",
@@ -352,7 +362,7 @@ class LLMEngine:
             user=user_name,
             message=user_message or "",
             song_name=song_info.get("title", "") if song_info else "",
-            song_list=song_list,
+            song_queue=queue_text,
         )
 
         if self._api_key and self._base_url:
@@ -452,9 +462,6 @@ class LLMEngine:
                 f"收到，{user_name}。让我们继续享受音乐。",
             ]
             return random.choice(responses)
-
-        if context == "song_recommend":
-            return "音乐是最好的陪伴，让我为你选一首歌。"
 
         return "这里是 Butterfly Radio，让音乐继续。"
 

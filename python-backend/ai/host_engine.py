@@ -71,7 +71,7 @@ class HostEngine:
             emit_to_client=True,
         )
 
-    async def handle_user_message(self, user_name: str, message: str) -> Optional[dict]:
+    async def handle_user_message(self, user_name: str, message: str, song_queue: list = None) -> Optional[dict]:
         """Handle a user message and generate response commentary."""
         # Safety check
         safety = content_safety.check_text(message)
@@ -82,6 +82,7 @@ class HostEngine:
                 user_name=user_name,
                 user_message="[消息已被过滤]",
                 emit_to_client=True,
+                song_queue=song_queue,
             )
 
         return await self._produce_commentary(
@@ -89,6 +90,7 @@ class HostEngine:
             user_name=user_name,
             user_message=message,
             emit_to_client=True,
+            song_queue=song_queue,
         )
 
     async def handle_song_request(self, user_name: str, song: dict) -> Optional[dict]:
@@ -107,6 +109,7 @@ class HostEngine:
         user_name: str = "听众",
         user_message: str = None,
         emit_to_client: bool = True,
+        song_queue: list = None,
     ) -> Optional[dict]:
         """
         Core pipeline: LLM text generation → content safety → TTS synthesis → emit to client.
@@ -118,6 +121,7 @@ class HostEngine:
                 song_info=song_info,
                 user_message=user_message,
                 user_name=user_name,
+                song_queue=song_queue,
             )
 
             if not text:
@@ -164,6 +168,7 @@ class HostEngine:
         song_info: dict = None,
         user_name: str = "听众",
         user_message: str = None,
+        song_queue: list = None,
     ) -> Optional[dict]:
         """
         Stream commentary: LLM → safety → emit chunks → TTS → final emit.
@@ -190,6 +195,7 @@ class HostEngine:
                 song_info=song_info,
                 user_message=user_message,
                 user_name=user_name,
+                song_queue=song_queue,
             ):
                 full_text = text_so_far
                 await emit_ai_commentary_stream({

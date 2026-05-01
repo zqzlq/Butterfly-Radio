@@ -1,5 +1,3 @@
-import re
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,6 +107,12 @@ async def generate_commentary(req: CommentaryRequest, db: AsyncSession = Depends
         user_name = "听众"
         logger.info(f"[API] Commentary request: context={req.context}, stream={req.stream}")
 
+        # Fetch song queue for chat_response context (for emotion-based recommendation)
+        song_queue = None
+        if req.context == "chat_response":
+            all_songs = await dao.get_all_songs(db)
+            song_queue = [{"title": s.title, "artist": s.artist} for s in all_songs[:50]]
+
         if req.stream:
             # Streaming mode: emit chunks via Socket.IO
             result = await host_engine.stream_commentary(
@@ -116,6 +120,7 @@ async def generate_commentary(req: CommentaryRequest, db: AsyncSession = Depends
                 song_info=song_info,
                 user_name=user_name,
                 user_message=req.user_message,
+                song_queue=song_queue,
             )
         else:
             # Non-streaming mode: wait for full response
@@ -126,7 +131,7 @@ async def generate_commentary(req: CommentaryRequest, db: AsyncSession = Depends
             elif req.context == "song_review" and song_info:
                 result = await host_engine.generate_song_review(song_info)
             elif req.context == "chat_response":
-                result = await host_engine.handle_user_message(user_name, req.user_message or "你好")
+                result = await host_engine.handle_user_message(user_name, req.user_message or "你好", song_queue=song_queue)
             else:
                 result = await host_engine.generate_greeting()
 
@@ -158,50 +163,3 @@ async def get_tts_voices():
         "edge": {k: v for k, v in EDGE_VOICES.items()},
         "volcengine": {k: v for k, v in VOLC_VOICES.items()},
     }
-
-
-class RecommendRequest(BaseModel):
-    user_message: str = Field(..., min_length=1, description="User's chat message")
-
-
-@router.post("/recommend")
-async def recommend_song(req: RecommendRequest, db: AsyncSession = Depends(get_db)):
-    """Analyze user mood and recommend a song from the local library."""
-    from ai.llm_engine import llm_engine
-    from loguru import logger
-
-    try:
-        # Get all songs from library
-        songs = await dao.get_all_songs(db)
-        if not songs:
-            return {"content": "曲库还是空的，先导入一些歌曲吧。", "recommend_song": None, "context": "song_recommend"}
-
-        # Build song list for LLM
-        song_list = "\n".join(f"- {s.title}（{s.artist}）" for s in songs)
-
-        # Generate recommendation via LLM
-        text = await llm_engine.generate_commentary(
-            context="song_recommend",
-            user_message=req.user_message,
-            song_list=song_list,
-        )
-
-        if not text:
-            return {"content": "让我想想为你推荐什么歌…", "recommend_song": None, "context": "song_recommend"}
-
-        # Extract recommendation tag: [推荐:歌名]
-        recommend_song = None
-        match = re.search(r"\[推荐[:：](.+?)\]", text)
-        if match:
-            recommend_song = match.group(1).strip()
-            # Remove the tag from display text
-            text = re.sub(r"\s*\[推荐[:：].+?\]\s*", "", text).strip()
-
-        logger.info(f"Recommend: message='{req.user_message[:30]}', song='{recommend_song}'")
-        return {"content": text, "recommend_song": recommend_song, "context": "song_recommend"}
-
-    except Exception as e:
-        logger.error(f"Recommend endpoint error: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"content": "让我为你选一首歌。", "recommend_song": None, "context": "song_recommend"}

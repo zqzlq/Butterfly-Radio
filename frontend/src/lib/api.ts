@@ -81,11 +81,6 @@ export const aiApi = {
       body: JSON.stringify({ context, song_id: songId, user_message: userMessage, stream }),
     }),
   getPresets: () => request<Record<string, any>>("/ai/presets"),
-  recommend: (message: string) =>
-    request<{ content: string; recommend_song: string | null; context: string }>("/ai/recommend", {
-      method: "POST",
-      body: JSON.stringify({ user_message: message }),
-    }),
 };
 
 // ─── Media ───
