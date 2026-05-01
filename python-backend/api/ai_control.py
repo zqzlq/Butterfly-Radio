@@ -12,9 +12,13 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 class AIConfigUpdate(BaseModel):
     mode: str = Field(default=None, description="AI mode: local_lightweight, local_highquality, cloud_api")
     host_style: str = Field(default=None, description="Host style: warm, rock, literary, news, cure")
+    tts_provider: str = Field(default=None, description="TTS provider: edge, volcengine, chat_tts")
+    tts_voice: str = Field(default=None, description="TTS voice name")
     tts_speed: float = Field(default=None, ge=0.5, le=2.0)
     cloud_provider: str = Field(default=None)
     cloud_api_key: str = Field(default=None)
+    volc_tts_appid: str = Field(default=None)
+    volc_tts_token: str = Field(default=None)
 
 
 class CommentaryRequest(BaseModel):
@@ -31,8 +35,8 @@ async def get_host_info():
     from ai.tts_engine import tts_engine
     return {
         "host": llm_engine.get_host_info(),
-        "mode": llm_engine._mode,
-        "tts_speed": tts_engine._speed,
+        "llm": llm_engine.get_status(),
+        "tts": tts_engine.get_status(),
     }
 
 
@@ -41,6 +45,7 @@ async def update_ai_config(data: AIConfigUpdate, db: AsyncSession = Depends(get_
     """Update AI configuration."""
     from ai.host_engine import host_engine
     from ai.llm_engine import llm_engine
+    from ai.tts_engine import tts_engine
 
     config_updates = {}
     if data.mode:
@@ -49,6 +54,18 @@ async def update_ai_config(data: AIConfigUpdate, db: AsyncSession = Depends(get_
         config_updates["host_style"] = data.host_style
     if data.tts_speed:
         config_updates["tts_speed"] = str(data.tts_speed)
+    if data.tts_provider:
+        config_updates["tts_provider"] = data.tts_provider
+        tts_engine.set_provider(data.tts_provider)
+    if data.tts_voice:
+        config_updates["tts_voice"] = data.tts_voice
+        tts_engine.set_voice(data.tts_voice)
+    if data.volc_tts_appid:
+        config_updates["volc_tts_appid"] = data.volc_tts_appid
+        tts_engine.set_volcengine_config(data.volc_tts_appid, data.volc_tts_token or "")
+    if data.volc_tts_token:
+        config_updates["volc_tts_token"] = data.volc_tts_token
+        tts_engine.set_volcengine_config(data.volc_tts_appid or tts_engine._volc_appid, data.volc_tts_token)
     if data.cloud_provider:
         config_updates["cloud_api_provider"] = data.cloud_provider
         llm_engine.set_cloud_config(data.cloud_provider, data.cloud_api_key or "")
@@ -128,4 +145,14 @@ async def get_host_presets():
     return {
         name: {"name": preset["name"], "style": name}
         for name, preset in HOST_PRESETS.items()
+    }
+
+
+@router.get("/tts-voices", response_model=dict)
+async def get_tts_voices():
+    """Get available TTS voices for all providers."""
+    from ai.tts_engine import EDGE_VOICES, VOLC_VOICES
+    return {
+        "edge": {k: v for k, v in EDGE_VOICES.items()},
+        "volcengine": {k: v for k, v in VOLC_VOICES.items()},
     }

@@ -43,7 +43,6 @@ class HostEngine:
         """Configure AI host settings."""
         if ai_mode:
             llm_engine.set_mode(ai_mode)
-            tts_engine.set_mode(ai_mode)
         if host_style:
             llm_engine.set_host_style(host_style)
         if tts_speed:
