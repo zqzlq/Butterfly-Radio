@@ -28,19 +28,85 @@ function extractSongRequest(text: string): string | null {
 }
 
 /**
- * Search the local queue for a matching song.
+ * Levenshtein distance between two strings.
  */
-function findSongInQueue(queue: { title: string; artist: string; [key: string]: any }[], query: string) {
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Similarity score between two strings (0~1, higher = more similar).
+ */
+function similarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+/**
+ * Search result with match type.
+ */
+interface SearchResult {
+  song: any;
+  matchType: "exact" | "partial" | "artist" | "fuzzy";
+  suggestion?: string; // If fuzzy matched, the original title
+}
+
+/**
+ * Search the local queue for a matching song. Supports exact, partial,
+ * artist, and fuzzy (typo-tolerant) matching.
+ */
+function findSongInQueue(
+  queue: { title: string; artist: string; [key: string]: any }[],
+  query: string
+): SearchResult | null {
   const q = query.toLowerCase();
-  // Exact title match first
-  let found = queue.find((s) => s.title.toLowerCase() === q);
-  if (found) return found;
-  // Partial title match
-  found = queue.find((s) => s.title.toLowerCase().includes(q));
-  if (found) return found;
-  // Artist match
-  found = queue.find((s) => s.artist.toLowerCase().includes(q));
-  return found || null;
+
+  // 1. Exact title match
+  const exact = queue.find((s) => s.title.toLowerCase() === q);
+  if (exact) return { song: exact, matchType: "exact" };
+
+  // 2. Partial title match
+  const partial = queue.find((s) => s.title.toLowerCase().includes(q));
+  if (partial) return { song: partial, matchType: "partial" };
+
+  // 3. Artist match
+  const artist = queue.find((s) => s.artist.toLowerCase().includes(q));
+  if (artist) return { song: artist, matchType: "artist" };
+
+  // 4. Fuzzy match (typo tolerance)
+  let bestSong: any = null;
+  let bestScore = 0;
+  for (const song of queue) {
+    const titleScore = similarity(q, song.title.toLowerCase());
+    const artistScore = similarity(q, song.artist.toLowerCase()) * 0.8; // lower weight
+    const score = Math.max(titleScore, artistScore);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSong = song;
+    }
+  }
+
+  // Threshold: at least 50% similar
+  if (bestSong && bestScore >= 0.5) {
+    return { song: bestSong, matchType: "fuzzy", suggestion: bestSong.title };
+  }
+
+  return null;
 }
 
 export function InteractionBar() {
@@ -73,10 +139,11 @@ export function InteractionBar() {
           const found = findSongInQueue(queue, songName);
 
           if (found) {
-            loadAndPlay(found);
+            loadAndPlay(found.song);
+            const hint = found.matchType === "fuzzy" ? `（没找到精确匹配，为你播放近似歌曲）` : "";
             addCommentary({
               id: Date.now().toString(),
-              content: `收到点歌请求，为你播放「${found.title}」。`,
+              content: `收到点歌请求，${hint}为你播放「${found.song.title}」。`,
               context: "song_request",
               host_name: usePlayerStore.getState().hostName,
               timestamp: Date.now(),
@@ -109,10 +176,11 @@ export function InteractionBar() {
         const found = findSongInQueue(queue, songName);
 
         if (found) {
-          loadAndPlay(found);
+          loadAndPlay(found.song);
+          const hint = found.matchType === "fuzzy" ? `（没找到精确匹配，为你播放近似歌曲）` : "";
           addCommentary({
             id: Date.now().toString(),
-            content: `为你播放「${found.title}」— ${found.artist}。`,
+            content: `${hint}为你播放「${found.song.title}」— ${found.song.artist}。`,
             context: "song_request",
             host_name: usePlayerStore.getState().hostName,
             timestamp: Date.now(),
