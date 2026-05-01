@@ -202,7 +202,39 @@ export function InteractionBar() {
       });
 
       interactionApi.send(text, "message").catch(() => {});
-      aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
+
+      // AI recommendation: analyze mood and suggest a song
+      try {
+        const result = await aiApi.recommend(text);
+        const hostName = usePlayerStore.getState().hostName;
+
+        // Display AI commentary
+        addCommentary({
+          id: Date.now().toString(),
+          content: result.content,
+          context: "song_recommend",
+          host_name: hostName,
+          timestamp: Date.now(),
+        });
+
+        // If AI recommended a song, try to find and play it
+        if (result.recommend_song) {
+          const found = findSongInQueue(queue, result.recommend_song);
+          if (found) {
+            loadAndPlay(found.song);
+            addCommentary({
+              id: (Date.now() + 1).toString(),
+              content: `为你推荐播放「${found.song.title}」— ${found.song.artist}。`,
+              context: "song_recommend",
+              host_name: hostName,
+              timestamp: Date.now(),
+            });
+          }
+        }
+      } catch {
+        // Fallback to regular commentary on error
+        aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
+      }
     } catch (err) {
       console.error("发送失败:", err);
     } finally {

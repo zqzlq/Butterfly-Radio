@@ -18,7 +18,7 @@ DEFAULT_CONFIGS = {
     "crossfade_duration": ("3.0", "float", "Crossfade duration in seconds"),
     "theme": ("default", "string", "UI theme name"),
     "cloud_api_key": ("", "string", "Cloud API key"),
-    "cloud_api_provider": ("doubao", "string", "Cloud API provider: doubao, qwen"),
+    "cloud_api_provider": ("deepseek", "string", "Cloud API provider: deepseek, openai, ollama, custom"),
 }
 
 

@@ -98,6 +98,18 @@ COMMENTARY_TEMPLATES = {
     "song_request": "听众「{user}」点了一首歌：{song_name}。请写一段口播回应这个点歌请求。",
     "greeting": "现在是{time}，请写一段开场问候语，欢迎听众收听。",
     "chat_response": "听众「{user}」说：「{message}」。请以电台主播的身份简短回应。",
+    "song_recommend": """听众说：「{message}」
+
+当前曲库歌曲列表：
+{song_list}
+
+请根据听众的情绪和状态，从曲库中挑选一首最合适的歌曲推荐给他/她。
+
+输出格式要求：
+1. 先写一段简短的口播回应（1-3句话），表达你对听众情绪的理解和关怀
+2. 然后推荐一首歌，在口播末尾用 [推荐:歌名] 标记，歌名必须是曲库中歌曲的完整标题
+3. 如果曲库中没有特别合适的歌，就不加推荐标记，只做普通回应
+4. 不要列出所有歌曲，只推荐最合适的一首""",
 }
 
 
@@ -228,10 +240,11 @@ class LLMEngine:
         song_info: dict = None,
         user_message: str = None,
         user_name: str = "听众",
+        song_list: str = "",
     ) -> str:
         """
         Generate AI host commentary.
-        context: one of song_intro, song_review, song_request, greeting, chat_response
+        context: one of song_intro, song_review, song_request, greeting, chat_response, song_recommend
         """
         system_prompt = self._get_system_prompt()
 
@@ -246,6 +259,7 @@ class LLMEngine:
             user=user_name,
             message=user_message or "",
             song_name=song_info.get("title", "") if song_info else "",
+            song_list=song_list,
         )
 
         # Try cloud API first if key is configured
@@ -320,6 +334,7 @@ class LLMEngine:
         song_info: dict = None,
         user_message: str = None,
         user_name: str = "听众",
+        song_list: str = "",
     ):
         """
         Stream AI commentary token by token.
@@ -337,6 +352,7 @@ class LLMEngine:
             user=user_name,
             message=user_message or "",
             song_name=song_info.get("title", "") if song_info else "",
+            song_list=song_list,
         )
 
         if self._api_key and self._base_url:
@@ -436,6 +452,9 @@ class LLMEngine:
                 f"收到，{user_name}。让我们继续享受音乐。",
             ]
             return random.choice(responses)
+
+        if context == "song_recommend":
+            return "音乐是最好的陪伴，让我为你选一首歌。"
 
         return "这里是 Butterfly Radio，让音乐继续。"
 
