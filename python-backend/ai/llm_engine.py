@@ -3,6 +3,14 @@ import os
 from typing import Optional
 from loguru import logger
 
+# Common rules for all host styles
+_COMMON_RULES = """
+重要规则：
+- 只输出纯口播文字，不要输出任何动作、情绪、表情描述
+- 禁止使用括号描述动作或情绪，如（轻笑着）（微笑着）（叹了口气）（温柔地说）等
+- 禁止使用 *动作* 或 [动作] 等任何形式的动作标注
+- 你是在对听众说话，不是在写剧本，不需要舞台指示"""
+
 # Host personality presets
 HOST_PRESETS = {
     "warm": {
@@ -19,7 +27,7 @@ HOST_PRESETS = {
 你的职责：
 - 在歌曲播放间隙进行口播，介绍下一首歌或点评上一首歌
 - 回应听众的留言和点歌请求
-- 营造轻松舒适的收听氛围""",
+- 营造轻松舒适的收听氛围""" + _COMMON_RULES,
     },
     "rock": {
         "name": "DJ Thunder",
@@ -34,7 +42,7 @@ HOST_PRESETS = {
 你的职责：
 - 用充满激情的方式介绍歌曲
 - 点评歌曲的音乐性和感染力
-- 点燃听众的热情""",
+- 点燃听众的热情""" + _COMMON_RULES,
     },
     "literary": {
         "name": "DJ 诗意",
@@ -49,7 +57,7 @@ HOST_PRESETS = {
 你的职责：
 - 用诗意的语言引入每一首歌
 - 将音乐与文学、艺术联系起来
-- 营造沉浸式的文艺收听体验""",
+- 营造沉浸式的文艺收听体验""" + _COMMON_RULES,
     },
     "news": {
         "name": "DJ 资讯",
@@ -64,7 +72,7 @@ HOST_PRESETS = {
 你的职责：
 - 提供歌曲的背景信息和音乐知识
 - 介绍歌手/乐队的故事
-- 分享音乐行业的有趣资讯""",
+- 分享音乐行业的有趣资讯""" + _COMMON_RULES,
     },
     "cure": {
         "name": "DJ 小确幸",
@@ -79,7 +87,7 @@ HOST_PRESETS = {
 你的职责：
 - 用治愈的语气引入歌曲
 - 给听众带来温暖和好心情
-- 营造像在家一样舒适的收听氛围""",
+- 营造像在家一样舒适的收听氛围""" + _COMMON_RULES,
     },
 }
 
