@@ -19,6 +19,7 @@ DEFAULT_CONFIGS = {
     "theme": ("default", "string", "UI theme name"),
     "cloud_api_key": ("", "string", "Cloud API key"),
     "cloud_api_provider": ("deepseek", "string", "Cloud API provider: deepseek, openai, ollama, custom"),
+    "jamendo_client_id": ("", "string", "Jamendo API client ID (register at https://developer.jamendo.com/)"),
 }
 
 

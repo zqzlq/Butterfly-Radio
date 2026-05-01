@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
-import { Send, Music, Mic } from "lucide-react";
+import { Send, Music, Mic, Download } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { interactionApi, aiApi, playlistApi } from "@/lib/api";
 import { loadAndPlay } from "@/player";
@@ -112,10 +112,81 @@ function findSongInQueue(
 export function InteractionBar() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const addInteraction = usePlayerStore((s) => s.addInteraction);
   const addCommentary = usePlayerStore((s) => s.addCommentary);
   const queue = usePlayerStore((s) => s.queue);
   const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
+
+  const handleDownloadAndPlay = async (track: any) => {
+    setDownloading(track.track_id);
+    try {
+      const song = await playlistApi.downloadTrack({
+        source: track.source,
+        track_id: track.track_id,
+        title: track.title,
+        artist: track.artist,
+        url: track.url,
+      });
+      // Refresh queue
+      const allSongs = await playlistApi.listSongs();
+      usePlayerStore.getState().setQueue(allSongs);
+      // Play the downloaded song
+      loadAndPlay(song);
+      addCommentary({
+        id: Date.now().toString(),
+        content: `已从 Jamendo 下载并播放「${track.title}」— ${track.artist}。`,
+        context: "song_request",
+        host_name: usePlayerStore.getState().hostName,
+        timestamp: Date.now(),
+      });
+    } catch (e: any) {
+      addCommentary({
+        id: Date.now().toString(),
+        content: `下载失败：${e.message || "未知错误"}`,
+        context: "song_request",
+        host_name: usePlayerStore.getState().hostName,
+        timestamp: Date.now(),
+      });
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const searchOnlineAndShow = async (songName: string) => {
+    try {
+      const { results } = await playlistApi.searchOnline(songName, 3);
+      if (results.length === 0) {
+        addCommentary({
+          id: Date.now().toString(),
+          content: `在 Jamendo 也没有找到「${songName}」的相关结果。`,
+          context: "song_request",
+          host_name: usePlayerStore.getState().hostName,
+          timestamp: Date.now(),
+        });
+        return;
+      }
+      // Show results as commentary with download info
+      const list = results.map((r: any, i: number) => `${i + 1}. ${r.title} — ${r.artist}`).join("\n");
+      addCommentary({
+        id: Date.now().toString(),
+        content: `本地没有「${songName}」，在 Jamendo 找到以下免费音乐：\n${list}\n\n点击下方按钮下载播放。`,
+        context: "song_request",
+        host_name: usePlayerStore.getState().hostName,
+        timestamp: Date.now(),
+        onlineResults: results,
+      });
+    } catch (e: any) {
+      // Jamendo not configured or error
+      addCommentary({
+        id: Date.now().toString(),
+        content: `本地没有「${songName}」。在线搜索暂不可用（${e.message || "请检查 Jamendo 配置"}）。`,
+        context: "song_request",
+        host_name: usePlayerStore.getState().hostName,
+        timestamp: Date.now(),
+      });
+    }
+  };
 
   const handleSend = async () => {
     const text = input.trim();
@@ -151,13 +222,8 @@ export function InteractionBar() {
           } else {
             const result = await interactionApi.send(text, "song_request");
             addInteraction(result);
-            addCommentary({
-              id: Date.now().toString(),
-              content: `收到点歌请求「${songName}」，在本地曲库中未找到匹配歌曲。`,
-              context: "song_request",
-              host_name: usePlayerStore.getState().hostName,
-              timestamp: Date.now(),
-            });
+            // Search online
+            await searchOnlineAndShow(songName);
           }
         }
         return;
@@ -186,9 +252,8 @@ export function InteractionBar() {
             timestamp: Date.now(),
           });
         } else {
-          // Not found locally, send to AI for commentary
-          interactionApi.send(text, "message").catch(() => {});
-          aiApi.generateCommentary("chat_response", undefined, `用户想听「${songName}」，但本地曲库中没有这首歌`, streamingEnabled).catch(() => {});
+          // Not found locally, search online
+          await searchOnlineAndShow(songName);
         }
         return;
       }
@@ -202,39 +267,7 @@ export function InteractionBar() {
       });
 
       interactionApi.send(text, "message").catch(() => {});
-
-      // AI recommendation: analyze mood and suggest a song
-      try {
-        const result = await aiApi.recommend(text);
-        const hostName = usePlayerStore.getState().hostName;
-
-        // Display AI commentary
-        addCommentary({
-          id: Date.now().toString(),
-          content: result.content,
-          context: "song_recommend",
-          host_name: hostName,
-          timestamp: Date.now(),
-        });
-
-        // If AI recommended a song, try to find and play it
-        if (result.recommend_song) {
-          const found = findSongInQueue(queue, result.recommend_song);
-          if (found) {
-            loadAndPlay(found.song);
-            addCommentary({
-              id: (Date.now() + 1).toString(),
-              content: `为你推荐播放「${found.song.title}」— ${found.song.artist}。`,
-              context: "song_recommend",
-              host_name: hostName,
-              timestamp: Date.now(),
-            });
-          }
-        }
-      } catch {
-        // Fallback to regular commentary on error
-        aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
-      }
+      aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
     } catch (err) {
       console.error("发送失败:", err);
     } finally {

@@ -39,6 +39,8 @@ export function SettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [jamendoClientId, setJamendoClientId] = useState("");
+  const [jamendoSaved, setJamendoSaved] = useState(false);
 
   // Music library state
   const [songCount, setSongCount] = useState(0);
@@ -56,6 +58,7 @@ export function SettingsPanel() {
     // Load config for other settings
     configApi.getAll().then((data) => {
       if (data?.configs?.tts_speed) setTtsSpeed(parseFloat(data.configs.tts_speed));
+      if (data?.configs?.jamendo_client_id) setJamendoClientId(data.configs.jamendo_client_id);
     }).catch(() => {});
   }, []);
 
@@ -102,6 +105,20 @@ export function SettingsPanel() {
       setTimeout(() => setApiKeySaved(false), 2000);
     } catch (e) {
       console.error("保存 API Key 失败:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveJamendo = async () => {
+    setSaving(true);
+    setJamendoSaved(false);
+    try {
+      await configApi.update("jamendo_client_id", jamendoClientId.trim());
+      setJamendoSaved(true);
+      setTimeout(() => setJamendoSaved(false), 2000);
+    } catch (e) {
+      console.error("保存 Jamendo 配置失败:", e);
     } finally {
       setSaving(false);
     }
@@ -274,6 +291,34 @@ export function SettingsPanel() {
                   <p className="text-[10px] text-text-disabled mt-2">支持 DeepSeek、OpenAI 等兼容接口</p>
                 </div>
               )}
+
+              {/* Jamendo config */}
+              <div className="mt-4 p-4 rounded-card bg-bg-card border border-white/[0.06]">
+                <label className="text-sm text-text-secondary block mb-2">Jamendo Client ID</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={jamendoClientId}
+                    onChange={(e) => setJamendoClientId(e.target.value)}
+                    placeholder="输入 Jamendo Client ID（用于在线搜索免费音乐）"
+                    className="flex-1 h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                  />
+                  <button
+                    onClick={handleSaveJamendo}
+                    disabled={saving}
+                    className="px-4 h-9 rounded-input bg-neon-purple text-white text-sm font-medium disabled:opacity-40 hover:shadow-[0_0_12px_rgba(123,97,255,0.3)] transition-all"
+                  >
+                    {saving ? "保存中..." : "保存"}
+                  </button>
+                </div>
+                {jamendoSaved && (
+                  <p className="text-xs text-neon-purple mt-2">Jamendo 配置已保存</p>
+                )}
+                <p className="text-[10px] text-text-disabled mt-2">
+                  点歌未找到时自动搜索 Jamendo 免费音乐。
+                  <a href="https://developer.jamendo.com/" target="_blank" rel="noopener" className="text-neon-purple/70 hover:text-neon-purple ml-1">注册获取</a>
+                </p>
+              </div>
             </div>
           )}
 

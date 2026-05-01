@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 
@@ -113,6 +114,69 @@ async def browse_directory(path: str = ""):
 
     parent = str(dir_path.parent) if dir_path.parent != dir_path else None
     return {"current": str(dir_path), "parent": parent, "items": items}
+
+
+# ─── Online Search ───
+
+class DownloadTrackRequest(BaseModel):
+    source: str = Field(..., description="Source platform: jamendo")
+    track_id: str = Field(..., description="Track ID on the platform")
+    title: str = Field(..., description="Track title")
+    artist: str = Field(..., description="Artist name")
+    url: str = Field(..., description="Direct download URL")
+
+
+@router.get("/search-online")
+async def search_online(keyword: str, limit: int = 5, db: AsyncSession = Depends(get_db)):
+    """Search for songs on Jamendo (free music platform)."""
+    client_id = await dao.get_config(db, "jamendo_client_id") or ""
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Jamendo Client ID 未配置，请在设置中填写")
+
+    from service.music_search import search_jamendo
+    results = await search_jamendo(keyword, client_id, limit=limit)
+    return {"results": results, "total": len(results)}
+
+
+@router.post("/download-track", response_model=SongResponse)
+async def download_track(req: DownloadTrackRequest, db: AsyncSession = Depends(get_db)):
+    """Download a track from an online platform and add to local library."""
+    from service.music_search import download_track as do_download
+    from service.playlist_service import get_audio_metadata
+
+    # Download the MP3
+    file_path = await do_download(
+        title=req.title,
+        artist=req.artist,
+        url=req.url,
+    )
+
+    if not file_path:
+        raise HTTPException(status_code=500, detail="下载失败")
+
+    # Extract metadata
+    metadata = get_audio_metadata(file_path)
+
+    # Check if already in database
+    existing = await dao.search_songs(db, req.title)
+    for s in existing:
+        if s.file_path == file_path:
+            return s
+
+    # Create song in database
+    song = await dao.create_song(
+        db,
+        title=metadata.get("title") or req.title,
+        artist=metadata.get("artist") or req.artist,
+        album=metadata.get("album"),
+        file_path=file_path,
+        file_format="mp3",
+        duration=metadata.get("duration", 0.0),
+    )
+
+    from loguru import logger
+    logger.info(f"Downloaded and imported: {song.title} from {req.source}")
+    return song
 
 
 # ─── Playlists ───

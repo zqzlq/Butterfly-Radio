@@ -53,6 +53,13 @@ export const playlistApi = {
     ),
   listPlaylists: () => request<any[]>("/playlist/"),
   getPlaylist: (id: string) => request<any>(`/playlist/${id}`),
+  searchOnline: (keyword: string, limit = 5) =>
+    request<{ results: any[]; total: number }>(`/playlist/search-online?keyword=${encodeURIComponent(keyword)}&limit=${limit}`),
+  downloadTrack: (data: { source: string; track_id: string; title: string; artist: string; url: string }) =>
+    request<any>("/playlist/download-track", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─── Interaction ───

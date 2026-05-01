@@ -22,6 +22,7 @@ export interface AiCommentary {
   timestamp: number;
   replay?: boolean;
   streaming?: boolean;
+  onlineResults?: any[];
 }
 
 export interface User {

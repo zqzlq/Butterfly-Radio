@@ -1,9 +1,33 @@
-import { Radio, RotateCcw } from "lucide-react";
+import { Radio, RotateCcw, Download } from "lucide-react";
 import { usePlayerStore } from "@/store";
+import { loadAndPlay } from "@/player";
+import { playlistApi } from "@/lib/api";
+import { useState } from "react";
 
 export function AiCommentBubble() {
   const commentaryHistory = usePlayerStore((s) => s.commentaryHistory);
   const hostName = usePlayerStore((s) => s.hostName);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const handleDownloadAndPlay = async (track: any) => {
+    setDownloading(track.track_id);
+    try {
+      const song = await playlistApi.downloadTrack({
+        source: track.source,
+        track_id: track.track_id,
+        title: track.title,
+        artist: track.artist,
+        url: track.url,
+      });
+      const allSongs = await playlistApi.listSongs();
+      usePlayerStore.getState().setQueue(allSongs);
+      loadAndPlay(song);
+    } catch (e) {
+      console.error("Download failed:", e);
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   if (commentaryHistory.length === 0) {
     return (
@@ -40,12 +64,34 @@ export function AiCommentBubble() {
                 {new Date(item.timestamp).toLocaleTimeString("zh-CN")}
               </span>
             </div>
-            <p className="text-sm text-text-primary leading-relaxed">
+            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-line">
               {item.content}
               {item.streaming && (
                 <span className="inline-block w-0.5 h-4 bg-neon-cyan ml-0.5 animate-pulse align-text-bottom" />
               )}
             </p>
+            {/* Online search results with download buttons */}
+            {item.onlineResults && item.onlineResults.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {item.onlineResults.map((track: any) => (
+                  <button
+                    key={track.track_id}
+                    onClick={() => handleDownloadAndPlay(track)}
+                    disabled={downloading === track.track_id}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-neon-purple/10 border border-neon-purple/20 text-left hover:bg-neon-purple/20 transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-3.5 h-3.5 text-neon-purple shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-text-primary truncate">{track.title}</p>
+                      <p className="text-[10px] text-text-secondary truncate">{track.artist}</p>
+                    </div>
+                    <span className="text-[10px] text-neon-purple shrink-0">
+                      {downloading === track.track_id ? "下载中..." : "下载"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button className="p-1 text-text-secondary hover:text-neon-cyan transition-colors duration-200 shrink-0 self-start mt-1">
             <RotateCcw className="w-3.5 h-3.5" />
