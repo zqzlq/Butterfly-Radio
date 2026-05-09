@@ -4,6 +4,15 @@ import { getFrequencyData } from "@/player";
 
 const BAR_COUNT = 48;
 
+function getAccentColors() {
+  const s = getComputedStyle(document.documentElement);
+  return {
+    accent: s.getPropertyValue("--accent").trim() || "#00CC66",
+    accentBright: s.getPropertyValue("--accent-bright").trim() || "#33FF88",
+    accentDim: s.getPropertyValue("--accent-dim").trim() || "#009944",
+  };
+}
+
 export function SpectrumVisualizer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
@@ -16,7 +25,6 @@ export function SpectrumVisualizer() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Handle high-DPI displays
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
@@ -27,11 +35,20 @@ export function SpectrumVisualizer() {
 
     const width = rect.width;
     const height = rect.height;
+    const colors = getAccentColors();
 
-    // Clear
     ctx.clearRect(0, 0, width, height);
 
-    // Get frequency data
+    // Draw subtle horizontal grid lines
+    ctx.strokeStyle = `${colors.accent}0A`;
+    ctx.lineWidth = 0.5;
+    for (let y = 0; y < height; y += 20) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
     const data = getFrequencyData();
     const barCount = BAR_COUNT;
     const gap = 2;
@@ -39,32 +56,29 @@ export function SpectrumVisualizer() {
     const step = Math.floor(data.length / barCount);
 
     for (let i = 0; i < barCount; i++) {
-      // Average a few frequency bins per bar
       let sum = 0;
       for (let j = 0; j < step; j++) {
         sum += data[i * step + j] || 0;
       }
       const value = sum / step / 255;
 
-      // When not playing, show breathing animation
       const barHeight = isPlaying
         ? Math.max(4, value * height * 0.85)
-        : Math.max(4, (Math.sin(Date.now() / 1000 + i * 0.3) * 0.15 + 0.15) * height);
+        : Math.max(4, (Math.sin(Date.now() / 1200 + i * 0.25) * 0.12 + 0.12) * height);
 
       const x = i * (barWidth + gap);
       const y = height - barHeight;
 
-      // Gradient for each bar
+      // Theme-aware gradient
       const gradient = ctx.createLinearGradient(x, height, x, y);
-      gradient.addColorStop(0, "#00F0FF");
-      gradient.addColorStop(0.5, "#7B61FF");
-      gradient.addColorStop(1, "#FF006E");
+      gradient.addColorStop(0, `${colors.accentDim}99`);
+      gradient.addColorStop(0.4, `${colors.accent}CC`);
+      gradient.addColorStop(1, `${colors.accentBright}F2`);
 
       ctx.fillStyle = gradient;
-      ctx.globalAlpha = isPlaying ? 0.85 : 0.3;
+      ctx.globalAlpha = isPlaying ? 0.9 : 0.2;
 
-      // Draw bar with rounded top
-      const radius = Math.min(barWidth / 2, 3);
+      const radius = Math.min(barWidth / 2, 2);
       ctx.beginPath();
       ctx.moveTo(x, height);
       ctx.lineTo(x, y + radius);
@@ -75,11 +89,11 @@ export function SpectrumVisualizer() {
       ctx.closePath();
       ctx.fill();
 
-      // Bright cap on top
+      // Bright cap
       if (isPlaying && barHeight > 8) {
         ctx.globalAlpha = 1;
-        ctx.fillStyle = "#00F0FF";
-        ctx.fillRect(x, y, barWidth, 2);
+        ctx.fillStyle = colors.accentBright;
+        ctx.fillRect(x, y, barWidth, 1.5);
       }
     }
 
@@ -97,10 +111,7 @@ export function SpectrumVisualizer() {
   }, [draw]);
 
   return (
-    <div className="flex-1 h-56 rounded-card bg-bg-primary border border-white/[0.06] overflow-hidden relative">
-      {/* CRT scanline overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.03] scanlines" />
-
+    <div className="flex-1 h-56 rounded-card bg-bg-primary border border-accent/[0.06] overflow-hidden relative">
       {/* Canvas */}
       <canvas
         ref={canvasRef}
@@ -108,15 +119,21 @@ export function SpectrumVisualizer() {
         style={{ imageRendering: "auto" }}
       />
 
-      {/* Subtle glow in center when playing */}
+      {/* Subtle green glow at bottom center */}
       {isPlaying && (
         <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2/3 h-1/2 pointer-events-none"
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-1/3 pointer-events-none"
           style={{
-            background: "radial-gradient(ellipse at bottom, rgba(0,240,255,0.06) 0%, transparent 70%)",
+            background: "radial-gradient(ellipse at bottom, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%)",
           }}
         />
       )}
+
+      {/* Corner accents */}
+      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-accent/15 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-accent/15 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-accent/15 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-accent/15 pointer-events-none" />
     </div>
   );
 }

@@ -20,9 +20,9 @@ export function SongInfo() {
 
   if (!currentSong) {
     return (
-      <div className="text-center space-y-1.5 max-w-md">
-        <h2 className="text-xl font-bold text-text-secondary">等待播放...</h2>
-        <p className="text-sm text-text-disabled">Butterfly Radio</p>
+      <div className="text-center space-y-2 max-w-md">
+        <h2 className="text-lg font-bold text-text-disabled tracking-wider uppercase">等待信号...</h2>
+        <p className="text-[10px] text-text-disabled tracking-widest uppercase">Butterfly Radio</p>
       </div>
     );
   }
@@ -34,16 +34,16 @@ export function SongInfo() {
         transitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
       )}
     >
-      <h2 className="text-xl font-bold text-text-primary truncate beat-glow">
+      <h2 className="text-xl font-bold text-text-primary truncate beat-glow tracking-wide">
         {currentSong.title}
       </h2>
       <p className="text-sm text-text-secondary truncate">
         {currentSong.artist}
         {currentSong.album ? ` · ${currentSong.album}` : ""}
       </p>
-      <div className="flex items-center justify-center gap-2 pt-0.5">
-        <span className="px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-capsule bg-neon-purple/15 text-neon-purple">
-          {currentSong.play_count > 0 ? `播放 ${currentSong.play_count} 次` : "AI 电台"}
+      <div className="flex items-center justify-center gap-2 pt-1">
+        <span className="px-3 py-0.5 text-[9px] font-medium uppercase tracking-[0.15em] rounded-capsule bg-accent/[0.08] text-accent/80 border border-accent/[0.1]">
+          {currentSong.play_count > 0 ? `${currentSong.play_count} plays` : "AI Radio"}
         </span>
       </div>
     </div>

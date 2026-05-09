@@ -108,6 +108,12 @@ export function getTtsAudioUrl(filename: string): string {
   return `${BASE_URL.replace("/api", "")}/api/media/tts/${filename}`;
 }
 
+export function getArtistPhotoUrl(artistName: string): string {
+  const encoded = encodeURIComponent(artistName);
+  if (isDev()) return `/api/media/artist-photo/${encoded}`;
+  return `${BASE_URL.replace("/api", "")}/api/media/artist-photo/${encoded}`;
+}
+
 // ─── Config ───
 
 export const configApi = {

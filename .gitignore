@@ -51,3 +51,5 @@ resources/models/*.safetensors
 
 # Electron
 out/
+CLAUDE.md
+.claude/

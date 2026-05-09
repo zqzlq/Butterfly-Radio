@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from "react";
-import { Send, Music, Mic, Download } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Send, Music, Mic } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { interactionApi, aiApi, playlistApi } from "@/lib/api";
+import { markPendingInteraction } from "@/socket";
 import { loadAndPlay } from "@/player";
 
 // Web Speech API type declarations
@@ -17,16 +18,11 @@ interface SpeechRecognitionErrorEvent extends Event {
 const SpeechRecognitionAPI =
   (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-/** Keywords that indicate a song request in natural language */
 const SONG_REQUEST_PATTERNS = [
   /(?:我想听|我想听一首|来一首|来首|点一首|点首|播放|放一首|放首|听一首|听首|来个|放个|听个)\s*(.+)/,
   /(.+?)(?:这首歌|这首|这首歌吧|来一下|安排一下)/,
 ];
 
-/**
- * Try to extract a song name from natural language text.
- * Returns the song name if detected, or null if not a song request.
- */
 function extractSongRequest(text: string): string | null {
   for (const pattern of SONG_REQUEST_PATTERNS) {
     const match = text.match(pattern);
@@ -40,9 +36,6 @@ function extractSongRequest(text: string): string | null {
   return null;
 }
 
-/**
- * Levenshtein distance between two strings.
- */
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
@@ -61,52 +54,38 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-/**
- * Similarity score between two strings (0~1, higher = more similar).
- */
 function similarity(a: string, b: string): number {
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return 1;
   return 1 - levenshtein(a, b) / maxLen;
 }
 
-/**
- * Search result with match type.
- */
 interface SearchResult {
   song: any;
   matchType: "exact" | "partial" | "artist" | "fuzzy";
-  suggestion?: string; // If fuzzy matched, the original title
+  suggestion?: string;
 }
 
-/**
- * Search the local queue for a matching song. Supports exact, partial,
- * artist, and fuzzy (typo-tolerant) matching.
- */
 function findSongInQueue(
   queue: { title: string; artist: string; [key: string]: any }[],
   query: string
 ): SearchResult | null {
   const q = query.toLowerCase();
 
-  // 1. Exact title match
   const exact = queue.find((s) => s.title.toLowerCase() === q);
   if (exact) return { song: exact, matchType: "exact" };
 
-  // 2. Partial title match
   const partial = queue.find((s) => s.title.toLowerCase().includes(q));
   if (partial) return { song: partial, matchType: "partial" };
 
-  // 3. Artist match
   const artist = queue.find((s) => s.artist.toLowerCase().includes(q));
   if (artist) return { song: artist, matchType: "artist" };
 
-  // 4. Fuzzy match (typo tolerance)
   let bestSong: any = null;
   let bestScore = 0;
   for (const song of queue) {
     const titleScore = similarity(q, song.title.toLowerCase());
-    const artistScore = similarity(q, song.artist.toLowerCase()) * 0.8; // lower weight
+    const artistScore = similarity(q, song.artist.toLowerCase()) * 0.8;
     const score = Math.max(titleScore, artistScore);
     if (score > bestScore) {
       bestScore = score;
@@ -114,7 +93,6 @@ function findSongInQueue(
     }
   }
 
-  // Threshold: at least 50% similar
   if (bestSong && bestScore >= 0.5) {
     return { song: bestSong, matchType: "fuzzy", suggestion: bestSong.title };
   }
@@ -125,23 +103,20 @@ function findSongInQueue(
 export function InteractionBar() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const inputRef = useRef(""); // Track latest input for onend closure
-  const isPTTRef = useRef(false); // Whether current session is push-to-talk
+  const inputRef = useRef("");
+  const isPTTRef = useRef(false);
   const addInteraction = usePlayerStore((s) => s.addInteraction);
   const addCommentary = usePlayerStore((s) => s.addCommentary);
   const queue = usePlayerStore((s) => s.queue);
   const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
 
-  // Keep inputRef in sync
   const setInputAndRef = (val: string) => {
     inputRef.current = val;
     setInput(val);
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -151,10 +126,8 @@ export function InteractionBar() {
     };
   }, []);
 
-  // Push-to-talk: hold V key (only when input is not focused)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger when typing in input or other elements
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === "KeyV" && !e.repeat && !isListening) {
         isPTTRef.current = true;
@@ -175,7 +148,6 @@ export function InteractionBar() {
     };
   }, [isListening]);
 
-  // Listen for global shortcut from Electron (when app is in background)
   useEffect(() => {
     const handleGlobalVoice = (_event: any, action: string) => {
       if (action === "start") {
@@ -187,7 +159,7 @@ export function InteractionBar() {
         toggleVoiceInput();
       }
     };
-    // @ts-ignore — Electron IPC
+    // @ts-ignore
     window.electronAPI?.onGlobalVoice?.(handleGlobalVoice);
     return () => {
       // @ts-ignore
@@ -233,7 +205,6 @@ export function InteractionBar() {
         }
       }
 
-      // Show final results, or interim if no final yet
       const text = finalTranscript || interimTranscript;
       setInputAndRef(text);
     };
@@ -241,7 +212,6 @@ export function InteractionBar() {
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
-      // Auto-send if we have text
       const text = inputRef.current.trim();
       if (text) {
         setTimeout(() => handleSendDirect(text), 100);
@@ -283,41 +253,6 @@ export function InteractionBar() {
     }
   };
 
-  const handleDownloadAndPlay = async (track: any) => {
-    setDownloading(track.track_id);
-    try {
-      const song = await playlistApi.downloadTrack({
-        source: track.source,
-        track_id: track.track_id,
-        title: track.title,
-        artist: track.artist,
-        url: track.url,
-      });
-      // Refresh queue
-      const allSongs = await playlistApi.listSongs();
-      usePlayerStore.getState().setQueue(allSongs);
-      // Play the downloaded song
-      loadAndPlay(song);
-      addCommentary({
-        id: Date.now().toString(),
-        content: `已从 Jamendo 下载并播放「${track.title}」— ${track.artist}。`,
-        context: "song_request",
-        host_name: usePlayerStore.getState().hostName,
-        timestamp: Date.now(),
-      });
-    } catch (e: any) {
-      addCommentary({
-        id: Date.now().toString(),
-        content: `下载失败：${e.message || "未知错误"}`,
-        context: "song_request",
-        host_name: usePlayerStore.getState().hostName,
-        timestamp: Date.now(),
-      });
-    } finally {
-      setDownloading(null);
-    }
-  };
-
   const searchOnlineAndShow = async (songName: string) => {
     try {
       const { results } = await playlistApi.searchOnline(songName, 3);
@@ -331,7 +266,6 @@ export function InteractionBar() {
         });
         return;
       }
-      // Show results as commentary with download info
       const list = results.map((r: any, i: number) => `${i + 1}. ${r.title} — ${r.artist}`).join("\n");
       addCommentary({
         id: Date.now().toString(),
@@ -342,7 +276,6 @@ export function InteractionBar() {
         onlineResults: results,
       });
     } catch (e: any) {
-      // Jamendo not configured or error
       addCommentary({
         id: Date.now().toString(),
         content: `本地没有「${songName}」。在线搜索暂不可用（${e.message || "请检查 Jamendo 配置"}）。`,
@@ -378,20 +311,20 @@ export function InteractionBar() {
 
   const processMessage = async (text: string) => {
     try {
-      // Parse /点歌 command
       if (text.startsWith("/点歌") || text.startsWith("/song")) {
         const songName = text.replace(/^\/(点歌|song)\s*/, "").trim();
         if (songName) {
-          addInteraction({
-            id: Date.now().toString(),
-            content: text,
-            interaction_type: "song_request",
-            created_at: new Date().toISOString(),
-          });
-
           const found = findSongInQueue(queue, songName);
 
           if (found) {
+            // Local match — add interaction locally, no backend call
+            addInteraction({
+              id: Date.now().toString(),
+              content: text,
+              interaction_type: "song_request",
+              created_at: new Date().toISOString(),
+              receivedAt: Date.now(),
+            });
             loadAndPlay(found.song);
             const hint = found.matchType === "fuzzy" ? `（没找到精确匹配，为你播放近似歌曲）` : "";
             addCommentary({
@@ -402,28 +335,26 @@ export function InteractionBar() {
               timestamp: Date.now(),
             });
           } else {
-            const result = await interactionApi.send(text, "song_request");
-            addInteraction(result);
-            // Search online
+            // Not found locally — send to backend, let socket broadcast handle interaction display
+            interactionApi.send(text, "song_request").catch(() => {});
             await searchOnlineAndShow(songName);
           }
         }
         return;
       }
 
-      // Natural language: detect song request intent
       const songName = extractSongRequest(text);
       if (songName) {
-        addInteraction({
-          id: Date.now().toString(),
-          content: text,
-          interaction_type: "song_request",
-          created_at: new Date().toISOString(),
-        });
-
         const found = findSongInQueue(queue, songName);
 
         if (found) {
+          // Local match — add interaction locally
+          addInteraction({
+            id: Date.now().toString(),
+            content: text,
+            interaction_type: "song_request",
+            created_at: new Date().toISOString(),
+          });
           loadAndPlay(found.song);
           const hint = found.matchType === "fuzzy" ? `（没找到精确匹配，为你播放近似歌曲）` : "";
           addCommentary({
@@ -434,19 +365,23 @@ export function InteractionBar() {
             timestamp: Date.now(),
           });
         } else {
-          // Not found locally, search online
+          // Not found — send to backend, let socket broadcast handle interaction display
+          interactionApi.send(text, "song_request").catch(() => {});
           await searchOnlineAndShow(songName);
         }
         return;
       }
 
-      // Regular message
+      // Add user message locally first — guaranteed earlier timestamp than AI response
+      const now = Date.now();
       addInteraction({
-        id: Date.now().toString(),
+        id: `local-${now}`,
         content: text,
         interaction_type: "message",
-        created_at: new Date().toISOString(),
+        created_at: new Date(now).toISOString(),
+        receivedAt: now,
       });
+      markPendingInteraction(text);
 
       interactionApi.send(text, "message").catch(() => {});
       aiApi.generateCommentary("chat_response", undefined, text, streamingEnabled).catch(() => {});
@@ -455,7 +390,7 @@ export function InteractionBar() {
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -465,7 +400,10 @@ export function InteractionBar() {
   const isCommand = input.startsWith("/点歌") || input.startsWith("/song");
 
   return (
-    <div className="flex items-center gap-3 px-6 h-14 glass-panel shrink-0">
+    <div className="relative flex items-center gap-3 px-6 h-14 surface-panel shrink-0">
+      {/* Top gradient edge */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent/15 to-transparent" />
+
       {/* Message input */}
       <div className="flex-1 relative">
         <input
@@ -474,13 +412,13 @@ export function InteractionBar() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isListening ? "正在聆听..." : "说点什么... (按住 V 说话，Alt+V 全局语音)"}
-          className="w-full h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan focus:shadow-neon-glow outline-none transition-all duration-200"
+          className="w-full h-9 px-4 rounded-lg bg-bg-secondary/80 text-sm text-text-primary placeholder:text-text-disabled border border-border-subtle focus:border-accent/40 outline-none transition-all duration-200 font-mono"
         />
         {/* Command hint */}
         {isCommand && input.replace(/^\/(点歌|song)\s*/, "").trim().length > 0 && (
-          <div className="absolute -top-8 left-0 right-0 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neon-purple/15 border border-neon-purple/30 text-xs text-neon-purple">
+          <div className="absolute -top-8 left-0 right-0 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/[0.08] border border-accent/15 text-xs text-accent">
             <Music className="w-3 h-3" />
-            <span>点歌模式：搜索「{input.replace(/^\/(点歌|song)\s*/, "").trim()}」</span>
+            <span className="tracking-wide">点歌模式：搜索「{input.replace(/^\/(点歌|song)\s*/, "").trim()}」</span>
           </div>
         )}
       </div>
@@ -489,7 +427,7 @@ export function InteractionBar() {
       <button
         onClick={handleSend}
         disabled={!input.trim() || sending}
-        className="w-8 h-8 rounded-full bg-neon-cyan flex items-center justify-center text-bg-primary disabled:opacity-40 hover:shadow-neon-glow active:scale-95 transition-all duration-200"
+        className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-bg-primary disabled:opacity-30 hover:shadow-glow-strong active:scale-95 transition-all duration-200"
       >
         <Send className="w-3.5 h-3.5" />
       </button>
@@ -497,7 +435,7 @@ export function InteractionBar() {
       {/* Song request quick button */}
       <button
         onClick={() => setInput("/点歌 ")}
-        className="w-8 h-8 rounded-full bg-neon-purple flex items-center justify-center text-white hover:shadow-[0_0_12px_rgba(123,97,255,0.3)] active:scale-95 transition-all duration-200"
+        className="w-8 h-8 rounded-full bg-accent/[0.08] border border-accent/15 flex items-center justify-center text-accent hover:bg-accent/15 active:scale-95 transition-all duration-200"
         title="点歌"
       >
         <Music className="w-3.5 h-3.5" />
@@ -507,10 +445,10 @@ export function InteractionBar() {
       {SpeechRecognitionAPI && (
         <button
           onClick={toggleVoiceInput}
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-white active:scale-95 transition-all duration-200 ${
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-bg-primary active:scale-95 transition-all duration-200 ${
             isListening
-              ? "bg-red-500 animate-pulse shadow-[0_0_16px_rgba(239,68,68,0.5)]"
-              : "bg-neon-pink hover:shadow-[0_0_12px_rgba(255,0,110,0.3)]"
+              ? "bg-danger animate-pulse shadow-[0_0_12px_rgba(255,51,51,0.3)]"
+              : "bg-accent/80 hover:bg-accent hover:shadow-glow"
           }`}
           title={isListening ? "停止录音" : "语音输入"}
         >

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_db
 from db import dao
+from service.artist_photo import fetch_artist_photo
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -140,4 +141,27 @@ async def serve_tts_audio(filename: str):
         path=str(file_path),
         media_type="audio/wav",
         filename=safe_name,
+    )
+
+
+@router.get("/artist-photo/{artist_name}")
+async def get_artist_photo(artist_name: str):
+    """Get a photo for an artist by searching the internet."""
+    photo_path = await fetch_artist_photo(artist_name)
+    if not photo_path:
+        raise HTTPException(status_code=404, detail="Artist photo not found")
+
+    media_type = "image/jpeg"
+    suffix = photo_path.suffix.lower()
+    if suffix == ".png":
+        media_type = "image/png"
+    elif suffix == ".webp":
+        media_type = "image/webp"
+    elif suffix == ".gif":
+        media_type = "image/gif"
+
+    return FileResponse(
+        path=str(photo_path),
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=604800"},  # 7 days
     )

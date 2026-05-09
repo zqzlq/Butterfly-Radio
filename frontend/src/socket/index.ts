@@ -31,8 +31,11 @@ function parseAndPlayRecommendation(content: string): void {
 }
 
 let socket: Socket | null = null;
-// Track commentary IDs that have already been created to prevent duplicates
+// Track IDs that have already been created to prevent duplicates
 const seenCommentaryIds = new Set<string>();
+const seenInteractionIds = new Set<string>();
+// Content-based dedup for interactions added locally before backend roundtrip
+const pendingInteractionContent = new Map<string, number>(); // content → timestamp
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -177,6 +180,26 @@ export function getSocket(): Socket {
     // ─── Interaction events ───
 
     socket.on("interaction", (data: any) => {
+      const id = data.id;
+      if (id && seenInteractionIds.has(id)) {
+        console.warn("[Socket.IO] interaction DUPLICATE blocked:", id);
+        return;
+      }
+      if (id) {
+        seenInteractionIds.add(id);
+        if (seenInteractionIds.size > 100) {
+          const first = seenInteractionIds.values().next().value;
+          if (first) seenInteractionIds.delete(first);
+        }
+      }
+      // Skip if this interaction was already added locally (content-based dedup)
+      const content = data.content;
+      if (content && pendingInteractionContent.has(content)) {
+        pendingInteractionContent.delete(content);
+        return;
+      }
+      // Assign client-side timestamp for correct chronological sorting with AI commentary
+      data.receivedAt = Date.now();
       store().addInteraction(data);
     });
   }
@@ -196,4 +219,14 @@ export function emitEvent(event: string, data?: any) {
   if (s.connected) {
     s.emit(event, data);
   }
+}
+
+/**
+ * Register a locally-added interaction so the socket handler
+ * can skip the duplicate broadcast from the backend.
+ */
+export function markPendingInteraction(content: string) {
+  pendingInteractionContent.set(content, Date.now());
+  // Auto-cleanup after 10s
+  setTimeout(() => pendingInteractionContent.delete(content), 10000);
 }

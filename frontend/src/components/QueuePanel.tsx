@@ -26,7 +26,6 @@ export function QueuePanel() {
       const store = usePlayerStore.getState();
       const newQueue = store.queue.filter((s) => s.id !== song.id);
       store.setQueue(newQueue);
-      // If deleting the current song, stop playback
       if (currentSong?.id === song.id) {
         const { stopPlayback } = await import("@/player");
         stopPlayback();
@@ -37,16 +36,21 @@ export function QueuePanel() {
   };
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-80 glass-card z-40 flex flex-col animate-fade-in-up">
+    <div className="absolute right-0 top-0 bottom-0 w-80 z-40 flex flex-col animate-fade-in-up overflow-hidden"
+      style={{ background: "linear-gradient(180deg, var(--surface-panel-from) 0%, var(--surface-panel-to) 100%)", borderLeft: "1px solid color-mix(in srgb, var(--accent) 10%, transparent)" }}
+    >
+      {/* Left edge glow */}
+      <div className="absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-accent/20 via-accent/5 to-accent/10" />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
         <div>
-          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">Queue</h3>
-          <p className="text-[11px] text-text-secondary mt-0.5">{queue.length} 首歌曲</p>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-[0.15em]">Queue</h3>
+          <p className="text-[11px] text-text-secondary mt-0.5 font-mono font-digital tracking-wider">{queue.length} tracks</p>
         </div>
         <button
           onClick={toggleQueue}
-          className="p-1.5 text-text-secondary hover:text-text-primary transition-colors"
+          className="p-1.5 text-text-secondary hover:text-accent transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
@@ -56,8 +60,8 @@ export function QueuePanel() {
       <div className="flex-1 overflow-y-auto">
         {queue.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-text-disabled">
-            <span className="text-2xl opacity-30">♪</span>
-            <span className="text-sm">队列为空</span>
+            <span className="text-2xl opacity-30">&#9835;</span>
+            <span className="text-sm tracking-wider">队列为空</span>
           </div>
         ) : (
           queue.map((song, index) => {
@@ -67,22 +71,22 @@ export function QueuePanel() {
                 key={song.id}
                 onClick={() => handlePlaySong(song)}
                 className={cn(
-                  "group w-full flex items-center gap-3 px-5 py-3 border-b border-white/[0.03] text-left transition-all duration-200 cursor-pointer",
+                  "group w-full flex items-center gap-3 px-5 py-3 border-b border-border-subtle/30 text-left transition-all duration-200 cursor-pointer",
                   isCurrent
-                    ? "bg-neon-cyan/[0.05] border-l-2 border-l-neon-cyan"
+                    ? "bg-accent/[0.06] border-l-2 border-l-accent"
                     : "hover:bg-white/[0.02] border-l-2 border-l-transparent active:bg-white/[0.04]"
                 )}
               >
                 {/* Index */}
                 <span className={cn(
-                  "text-[11px] font-mono w-5 text-center shrink-0",
-                  isCurrent ? "text-neon-cyan" : "text-text-disabled"
+                  "text-[11px] font-mono font-digital w-5 text-center shrink-0",
+                  isCurrent ? "text-accent" : "text-text-disabled"
                 )}>
                   {isCurrent ? (
                     <span className="flex items-center justify-center gap-[2px]">
-                      <span className="w-[3px] h-2.5 bg-neon-cyan rounded-full animate-spectrum" />
-                      <span className="w-[3px] h-3.5 bg-neon-cyan rounded-full animate-spectrum" style={{ animationDelay: "0.1s" }} />
-                      <span className="w-[3px] h-2 bg-neon-cyan rounded-full animate-spectrum" style={{ animationDelay: "0.2s" }} />
+                      <span className="w-[3px] h-2.5 bg-accent rounded-full animate-spectrum" />
+                      <span className="w-[3px] h-3.5 bg-accent rounded-full animate-spectrum" style={{ animationDelay: "0.1s" }} />
+                      <span className="w-[3px] h-2 bg-accent rounded-full animate-spectrum" style={{ animationDelay: "0.2s" }} />
                     </span>
                   ) : (
                     index + 1
@@ -93,7 +97,7 @@ export function QueuePanel() {
                 <div className="flex-1 min-w-0">
                   <p className={cn(
                     "text-sm truncate",
-                    isCurrent ? "text-neon-cyan font-medium" : "text-text-primary"
+                    isCurrent ? "text-accent font-medium" : "text-text-primary"
                   )}>
                     {song.title}
                   </p>
@@ -101,12 +105,12 @@ export function QueuePanel() {
                 </div>
 
                 {/* Duration & Delete */}
-                <span className="font-mono text-[11px] text-text-secondary shrink-0">
+                <span className="font-mono font-digital text-[11px] text-text-secondary shrink-0 tracking-wider">
                   {formatTime(song.duration)}
                 </span>
                 <button
                   onClick={(e) => handleDeleteSong(e, song)}
-                  className="p-1 text-text-disabled hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                  className="p-1 text-text-disabled hover:text-danger transition-colors opacity-0 group-hover:opacity-100"
                   title="删除"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -119,9 +123,9 @@ export function QueuePanel() {
 
       {/* Footer */}
       {queue.length > 0 && (
-        <div className="px-5 py-3 border-t border-white/[0.06] flex items-center gap-1.5 text-[11px] text-text-secondary">
+        <div className="px-5 py-3 border-t border-border-subtle flex items-center gap-1.5 text-[11px] text-text-secondary">
           <Clock className="w-3 h-3 shrink-0" />
-          <span>预计剩余：{formatTime(remainingDuration)}</span>
+          <span className="font-mono font-digital tracking-wider">剩余：{formatTime(remainingDuration)}</span>
         </div>
       )}
     </div>

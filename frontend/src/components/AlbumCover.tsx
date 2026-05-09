@@ -2,17 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Heart, Music } from "lucide-react";
 import { usePlayerStore } from "@/store";
 import { cn } from "@/lib/cn";
-import { playlistApi } from "@/lib/api";
+import { playlistApi, getArtistPhotoUrl } from "@/lib/api";
 import { getFrequencyData } from "@/player";
 
 export function AlbumCover() {
   const currentSong = usePlayerStore((s) => s.currentSong);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [transitioning, setTransitioning] = useState(false);
-  const [favAnimating, setFavAnimating] = useState(false);
+  const [artistPhotoFailed, setArtistPhotoFailed] = useState(false);
   const prevSongIdRef = useRef<string | null>(null);
 
-  // Beat-reactive animation
   const [bass, setBass] = useState(0);
   const bassRef = useRef(0);
   const rafRef = useRef(0);
@@ -42,6 +41,7 @@ export function AlbumCover() {
   useEffect(() => {
     if (currentSong?.id !== prevSongIdRef.current) {
       prevSongIdRef.current = currentSong?.id ?? null;
+      setArtistPhotoFailed(false);
       if (prevSongIdRef.current) {
         setTransitioning(true);
         const timer = setTimeout(() => setTransitioning(false), 400);
@@ -52,7 +52,6 @@ export function AlbumCover() {
 
   const handleToggleFavorite = async () => {
     if (!currentSong) return;
-    setFavAnimating(true);
     try {
       const updated = await playlistApi.toggleFavorite(currentSong.id);
       usePlayerStore.getState().setCurrentSong({
@@ -61,47 +60,66 @@ export function AlbumCover() {
       });
     } catch (e) {
       console.error("收藏操作失败:", e);
-    } finally {
-      setTimeout(() => setFavAnimating(false), 500);
     }
   };
 
   const coverUrl = currentSong?.cover_path || null;
+  const artistPhotoUrl = currentSong?.artist && !artistPhotoFailed
+    ? getArtistPhotoUrl(currentSong.artist)
+    : null;
 
   return (
     <div className="relative w-56 h-56 rounded-card shrink-0 group">
-      {/* Glow ring */}
+      {/* Glow ring - conic gradient sci-fi effect */}
       {isPlaying && (
-        <div
-          className="absolute inset-[-4px] rounded-card animate-rotate-slow"
-          style={{
-            background: "conic-gradient(from 0deg, #00F0FF, #7B61FF, #00F0FF)",
-            filter: "blur(16px)",
-            opacity: 0.2 + bass * 0.5,
-          }}
-        />
+        <>
+          <div
+            className="absolute inset-[-6px] rounded-card animate-rotate-slow"
+            style={{
+              background: "conic-gradient(from 0deg, transparent 0%, color-mix(in srgb, var(--accent) 30%, transparent) 25%, transparent 50%, color-mix(in srgb, var(--accent) 15%, transparent) 75%, transparent 100%)",
+              filter: `blur(${12 + bass * 8}px)`,
+              opacity: 0.4 + bass * 0.4,
+            }}
+          />
+          <div
+            className="absolute inset-[-2px] rounded-card"
+            style={{
+              border: `1px solid rgba(0,204,102,${0.1 + bass * 0.3})`,
+            }}
+          />
+        </>
       )}
 
       {/* Cover image */}
       <div
         className={cn(
-          "relative w-full h-full rounded-card overflow-hidden border border-white/[0.06] bg-bg-secondary flex items-center justify-center transition-all duration-400",
+          "relative w-full h-full rounded-card overflow-hidden bg-bg-secondary flex items-center justify-center transition-all duration-400",
           transitioning ? "opacity-0 scale-95" : "opacity-100"
         )}
-        style={isPlaying && !transitioning ? { transform: `scale(${1 + bass * 0.06})` } : undefined}
+        style={isPlaying && !transitioning ? { transform: `scale(${1 + bass * 0.05})` } : undefined}
       >
         {currentSong && coverUrl ? (
           <img src={coverUrl} alt={currentSong.title} className="w-full h-full object-cover" />
+        ) : currentSong && artistPhotoUrl ? (
+          <img
+            src={artistPhotoUrl}
+            alt={currentSong.artist}
+            className="w-full h-full object-cover"
+            onError={() => setArtistPhotoFailed(true)}
+          />
         ) : (
-          <Music className="w-14 h-14 text-text-disabled" />
+          <div className="flex flex-col items-center gap-2">
+            <Music className="w-12 h-12 text-text-disabled" />
+            <span className="text-[10px] text-text-disabled tracking-widest uppercase">No Signal</span>
+          </div>
         )}
 
         {/* Playing indicator */}
         {isPlaying && !transitioning && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-sm">
-            <span className="w-1.5 h-3 bg-neon-cyan rounded-full animate-spectrum" />
-            <span className="w-1.5 h-4 bg-neon-cyan rounded-full animate-spectrum" style={{ animationDelay: "0.1s" }} />
-            <span className="w-1.5 h-2.5 bg-neon-cyan rounded-full animate-spectrum" style={{ animationDelay: "0.2s" }} />
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm">
+            <span className="w-1 h-3 bg-accent rounded-full animate-spectrum" />
+            <span className="w-1 h-4 bg-accent rounded-full animate-spectrum" style={{ animationDelay: "0.1s" }} />
+            <span className="w-1 h-2.5 bg-accent rounded-full animate-spectrum" style={{ animationDelay: "0.2s" }} />
           </div>
         )}
       </div>
@@ -111,41 +129,15 @@ export function AlbumCover() {
         <button
           onClick={handleToggleFavorite}
           className={cn(
-            "absolute bottom-3 right-3 p-2 rounded-full bg-black/50 backdrop-blur-sm transition-all duration-200",
+            "absolute bottom-3 right-3 p-2 rounded-full bg-black/60 backdrop-blur-sm transition-all duration-200",
             currentSong.is_favorited
-              ? "text-neon-pink neon-text-pink"
-              : "text-text-secondary hover:text-neon-pink",
-            favAnimating && "scale-125"
+              ? "text-accent"
+              : "text-text-secondary hover:text-accent"
           )}
         >
           <Heart className={cn("w-4 h-4", currentSong.is_favorited && "fill-current")} />
-          {/* Favorite particle effect */}
-          {favAnimating && currentSong.is_favorited && (
-            <>
-              {[...Array(6)].map((_, i) => (
-                <span
-                  key={i}
-                  className="absolute w-1 h-1 rounded-full bg-neon-pink"
-                  style={{
-                    animation: `particle-${i} 0.5s ease-out forwards`,
-                    left: "50%",
-                    top: "50%",
-                  }}
-                />
-              ))}
-            </>
-          )}
         </button>
       )}
-
-      <style>{`
-        @keyframes particle-0 { to { transform: translate(12px, -16px); opacity: 0; } }
-        @keyframes particle-1 { to { transform: translate(-10px, -14px); opacity: 0; } }
-        @keyframes particle-2 { to { transform: translate(16px, 4px); opacity: 0; } }
-        @keyframes particle-3 { to { transform: translate(-14px, 6px); opacity: 0; } }
-        @keyframes particle-4 { to { transform: translate(4px, -18px); opacity: 0; } }
-        @keyframes particle-5 { to { transform: translate(-6px, 14px); opacity: 0; } }
-      `}</style>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw } from "lucide-react";
-import { usePlayerStore } from "@/store";
+import { X, Cpu, Monitor, Cloud, FolderOpen, Music, RefreshCw, Palette } from "lucide-react";
+import { usePlayerStore, type ThemeId } from "@/store";
 import { cn } from "@/lib/cn";
 import { aiApi, playlistApi, configApi } from "@/lib/api";
 
@@ -9,8 +9,30 @@ const TABS = [
   { key: "host", label: "主播设置" },
   { key: "music", label: "音乐库" },
   { key: "playback", label: "播放设置" },
+  { key: "theme", label: "主题" },
   { key: "about", label: "关于" },
 ] as const;
+
+const THEMES: { id: ThemeId; label: string; desc: string; colors: string[] }[] = [
+  {
+    id: "sci-fi",
+    label: "Sci-Fi",
+    desc: "暗黑科幻，霓虹绿点缀",
+    colors: ["#0A0A0A", "#00CC66", "#33FF88", "#1A1A1A"],
+  },
+  {
+    id: "ins",
+    label: "Instagram",
+    desc: "柔和暗紫，渐变粉紫点缀",
+    colors: ["#121218", "#C084FC", "#E879F9", "#242430"],
+  },
+  {
+    id: "warm",
+    label: "暖色调",
+    desc: "深色暖底，琥珀橙光晕",
+    colors: ["#141008", "#F59E0B", "#FBBF24", "#282018"],
+  },
+];
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -32,7 +54,9 @@ export function SettingsPanel() {
   const toggleSettings = usePlayerStore((s) => s.toggleSettings);
   const streamingEnabled = usePlayerStore((s) => s.streamingEnabled);
   const setStreamingEnabled = usePlayerStore((s) => s.setStreamingEnabled);
-  const [activeTab, setActiveTab] = useState<TabKey>("ai");
+  const currentTheme = usePlayerStore((s) => s.theme);
+  const setTheme = usePlayerStore((s) => s.setTheme);
+  const [activeTab, setActiveTab] = useState<TabKey>("theme");
   const [aiMode, setAiMode] = useState("cloud_api");
   const [hostStyle, setHostStyle] = useState("warm");
   const [ttsSpeed, setTtsSpeed] = useState(1.0);
@@ -42,7 +66,6 @@ export function SettingsPanel() {
   const [jamendoClientId, setJamendoClientId] = useState("");
   const [jamendoSaved, setJamendoSaved] = useState(false);
 
-  // Music library state
   const [songCount, setSongCount] = useState(0);
   const [importDir, setImportDir] = useState("");
   const [importing, setImporting] = useState(false);
@@ -50,12 +73,10 @@ export function SettingsPanel() {
 
   useEffect(() => {
     playlistApi.listSongs().then((songs) => setSongCount(songs.length)).catch(() => {});
-    // Load current AI config
     aiApi.getHost().then((data) => {
       if (data?.llm?.mode) setAiMode(data.llm.mode);
       if (data?.host?.style) setHostStyle(data.host.style);
     }).catch(() => {});
-    // Load config for other settings
     configApi.getAll().then((data) => {
       if (data?.configs?.tts_speed) setTtsSpeed(parseFloat(data.configs.tts_speed));
       if (data?.configs?.jamendo_client_id) setJamendoClientId(data.configs.jamendo_client_id);
@@ -124,7 +145,6 @@ export function SettingsPanel() {
     }
   };
 
-  // Directory browser state
   const [browsePath, setBrowsePath] = useState("");
   const [browseParent, setBrowseParent] = useState<string | null>(null);
   const [browseItems, setBrowseItems] = useState<{ name: string; path: string }[]>([]);
@@ -183,12 +203,20 @@ export function SettingsPanel() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={toggleSettings} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={toggleSettings} />
 
       {/* Panel */}
-      <div className="relative w-[560px] max-h-[80vh] rounded-card bg-bg-secondary border border-white/[0.06] flex overflow-hidden animate-fade-in-up">
+      <div className="relative w-[560px] max-h-[80vh] rounded-card flex overflow-hidden animate-fade-in-up"
+        style={{ background: "linear-gradient(180deg, var(--surface-panel-from) 0%, var(--surface-panel-to) 100%)", border: "1px solid color-mix(in srgb, var(--accent) 10%, transparent)" }}
+      >
+        {/* Corner accents */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-accent/20 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-accent/20 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-accent/20 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-accent/20 pointer-events-none" />
+
         {/* Sidebar */}
-        <div className="w-40 shrink-0 border-r border-white/[0.06] py-4">
+        <div className="w-40 shrink-0 border-r border-border-subtle py-4" style={{ background: "rgba(6,6,8,0.9)" }}>
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -196,7 +224,7 @@ export function SettingsPanel() {
               className={cn(
                 "w-full text-left px-4 py-2.5 text-sm transition-colors duration-200",
                 activeTab === tab.key
-                  ? "text-neon-cyan border-l-2 border-neon-cyan bg-neon-cyan/[0.05]"
+                  ? "text-accent border-l-2 border-accent bg-accent/[0.06]"
                   : "text-text-secondary hover:text-text-primary border-l-2 border-transparent"
               )}
             >
@@ -209,10 +237,10 @@ export function SettingsPanel() {
         <div className="flex-1 p-6 overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-text-primary">设置</h2>
+            <h2 className="text-lg font-bold text-text-primary tracking-wider">设置</h2>
             <div className="flex items-center gap-3">
-              {saving && <span className="text-[10px] text-neon-cyan animate-pulse-neon">保存中...</span>}
-              <button onClick={toggleSettings} className="p-1.5 text-text-secondary hover:text-text-primary transition-colors">
+              {saving && <span className="text-[10px] text-accent animate-pulse-green">保存中...</span>}
+              <button onClick={toggleSettings} className="p-1.5 text-text-secondary hover:text-accent transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -234,15 +262,16 @@ export function SettingsPanel() {
                     className={cn(
                       "w-full flex items-center gap-4 p-4 rounded-card border transition-all duration-200 text-left",
                       disabled
-                        ? "opacity-40 cursor-not-allowed border-white/[0.04] bg-bg-card"
+                        ? "opacity-40 cursor-not-allowed border-border-subtle"
                         : selected
-                          ? "border-neon-cyan bg-neon-cyan/[0.05] shadow-neon"
-                          : "border-white/[0.06] hover:border-white/[0.12] bg-bg-card"
+                          ? "border-accent/40 bg-accent/[0.06] shadow-glow"
+                          : "border-border-subtle hover:border-accent/20"
                     )}
+                    style={!disabled && !selected ? { background: "rgba(16,16,22,0.6)" } : disabled ? { background: "rgba(16,16,22,0.4)" } : undefined}
                   >
                     <div className={cn(
                       "w-10 h-10 rounded-lg flex items-center justify-center",
-                      selected ? "bg-neon-cyan/20 text-neon-cyan" : "bg-text-disabled/15 text-text-secondary"
+                      selected ? "bg-accent/15 text-accent" : "bg-white/[0.04] text-text-secondary"
                     )}>
                       <Icon className="w-5 h-5" />
                     </div>
@@ -250,7 +279,7 @@ export function SettingsPanel() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-text-primary">{mode.label}</span>
                         {mode.recommended && (
-                          <span className="px-2 py-0.5 text-[9px] font-semibold rounded-capsule bg-neon-cyan/15 text-neon-cyan uppercase">
+                          <span className="px-2 py-0.5 text-[9px] font-semibold rounded-capsule bg-accent/10 text-accent uppercase tracking-wider">
                             推荐
                           </span>
                         )}
@@ -259,15 +288,15 @@ export function SettingsPanel() {
                     </div>
                     <div className={cn(
                       "w-4 h-4 rounded-full border-2 transition-colors",
-                      selected ? "border-neon-cyan bg-neon-cyan" : "border-text-disabled"
+                      selected ? "border-accent bg-accent" : "border-text-disabled"
                     )} />
                   </button>
                 );
               })}
 
-              {/* Cloud API key input (only visible in cloud mode) */}
+              {/* Cloud API key input */}
               {aiMode === "cloud_api" && (
-                <div className="mt-4 p-4 rounded-card bg-bg-card border border-white/[0.06]">
+                <div className="mt-4 p-4 rounded-card border border-border-subtle" style={{ background: "rgba(16,16,22,0.6)" }}>
                   <label className="text-sm text-text-secondary block mb-2">DeepSeek API Key</label>
                   <div className="flex gap-2">
                     <input
@@ -275,25 +304,26 @@ export function SettingsPanel() {
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder="输入 DeepSeek API Key"
-                      className="flex-1 h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                      className="flex-1 h-9 px-4 rounded-lg text-sm text-text-primary placeholder:text-text-disabled border border-border-subtle focus:border-accent/40 outline-none transition-all font-mono"
+                      style={{ background: "rgba(10,10,14,0.8)" }}
                     />
                     <button
                       onClick={handleSaveApiKey}
                       disabled={!apiKey.trim() || saving}
-                      className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all"
+                      className="px-4 h-9 rounded-lg bg-accent text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-glow transition-all"
                     >
                       {saving ? "保存中..." : "保存"}
                     </button>
                   </div>
                   {apiKeySaved && (
-                    <p className="text-xs text-neon-cyan mt-2">API Key 已保存</p>
+                    <p className="text-xs text-accent mt-2">API Key 已保存</p>
                   )}
                   <p className="text-[10px] text-text-disabled mt-2">支持 DeepSeek、OpenAI 等兼容接口</p>
                 </div>
               )}
 
               {/* Jamendo config */}
-              <div className="mt-4 p-4 rounded-card bg-bg-card border border-white/[0.06]">
+              <div className="mt-4 p-4 rounded-card border border-border-subtle" style={{ background: "rgba(16,16,22,0.6)" }}>
                 <label className="text-sm text-text-secondary block mb-2">Jamendo Client ID</label>
                 <div className="flex gap-2">
                   <input
@@ -301,22 +331,23 @@ export function SettingsPanel() {
                     value={jamendoClientId}
                     onChange={(e) => setJamendoClientId(e.target.value)}
                     placeholder="输入 Jamendo Client ID（用于在线搜索免费音乐）"
-                    className="flex-1 h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                    className="flex-1 h-9 px-4 rounded-lg text-sm text-text-primary placeholder:text-text-disabled border border-border-subtle focus:border-accent/40 outline-none transition-all font-mono"
+                    style={{ background: "rgba(10,10,14,0.8)" }}
                   />
                   <button
                     onClick={handleSaveJamendo}
                     disabled={saving}
-                    className="px-4 h-9 rounded-input bg-neon-purple text-white text-sm font-medium disabled:opacity-40 hover:shadow-[0_0_12px_rgba(123,97,255,0.3)] transition-all"
+                    className="px-4 h-9 rounded-lg bg-accent/15 text-accent text-sm font-medium disabled:opacity-40 hover:bg-accent/25 transition-all"
                   >
                     {saving ? "保存中..." : "保存"}
                   </button>
                 </div>
                 {jamendoSaved && (
-                  <p className="text-xs text-neon-purple mt-2">Jamendo 配置已保存</p>
+                  <p className="text-xs text-accent mt-2">Jamendo 配置已保存</p>
                 )}
                 <p className="text-[10px] text-text-disabled mt-2">
                   点歌未找到时自动搜索 Jamendo 免费音乐。
-                  <a href="https://developer.jamendo.com/" target="_blank" rel="noopener" className="text-neon-purple/70 hover:text-neon-purple ml-1">注册获取</a>
+                  <a href="https://developer.jamendo.com/" target="_blank" rel="noopener" className="text-accent/70 hover:text-accent ml-1">注册获取</a>
                 </p>
               </div>
             </div>
@@ -334,8 +365,8 @@ export function SettingsPanel() {
                     className={cn(
                       "px-4 py-2 rounded-capsule text-sm border transition-all duration-200",
                       hostStyle === style.key
-                        ? "border-neon-cyan bg-neon-cyan/15 text-neon-cyan"
-                        : "border-white/[0.06] text-text-secondary hover:border-white/[0.12]"
+                        ? "border-accent/40 bg-accent/10 text-accent"
+                        : "border-border-subtle text-text-secondary hover:border-accent/20"
                     )}
                   >
                     {style.label}
@@ -351,11 +382,11 @@ export function SettingsPanel() {
                   step="0.1"
                   value={ttsSpeed}
                   onChange={(e) => handleTtsSpeedChange(parseFloat(e.target.value))}
-                  className="w-full accent-neon-cyan"
+                  className="w-full accent-accent"
                 />
                 <div className="flex justify-between text-[10px] text-text-disabled mt-1">
                   <span>0.5x</span>
-                  <span className="text-neon-cyan">{ttsSpeed.toFixed(1)}x</span>
+                  <span className="text-accent font-mono font-digital">{ttsSpeed.toFixed(1)}x</span>
                   <span>2.0x</span>
                 </div>
               </div>
@@ -366,17 +397,17 @@ export function SettingsPanel() {
           {activeTab === "music" && (
             <div className="space-y-5">
               {/* Current stats */}
-              <div className="flex items-center gap-3 p-4 rounded-card bg-bg-card border border-white/[0.06]">
-                <div className="w-10 h-10 rounded-lg bg-neon-purple/20 flex items-center justify-center">
-                  <Music className="w-5 h-5 text-neon-purple" />
+              <div className="flex items-center gap-3 p-4 rounded-card border border-border-subtle" style={{ background: "rgba(16,16,22,0.6)" }}>
+                <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center">
+                  <Music className="w-5 h-5 text-accent" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-text-primary">本地音乐库</p>
-                  <p className="text-xs text-text-secondary">已收录 {songCount} 首歌曲</p>
+                  <p className="text-xs text-text-secondary font-mono font-digital">已收录 {songCount} 首歌曲</p>
                 </div>
                 <button
                   onClick={() => playlistApi.listSongs().then((s) => setSongCount(s.length)).catch(() => {})}
-                  className="ml-auto p-1.5 text-text-secondary hover:text-neon-cyan transition-colors"
+                  className="ml-auto p-1.5 text-text-secondary hover:text-accent transition-colors"
                   title="刷新"
                 >
                   <RefreshCw className="w-4 h-4" />
@@ -392,13 +423,14 @@ export function SettingsPanel() {
                     value={importDir}
                     onChange={(e) => setImportDir(e.target.value)}
                     placeholder="输入文件夹路径，如 D:\Music"
-                    className="flex-1 h-9 px-4 rounded-input bg-bg-secondary text-sm text-text-primary placeholder:text-text-disabled border border-transparent focus:border-neon-cyan outline-none transition-all"
+                    className="flex-1 h-9 px-4 rounded-lg text-sm text-text-primary placeholder:text-text-disabled border border-border-subtle focus:border-accent/40 outline-none transition-all font-mono"
+                    style={{ background: "rgba(10,10,14,0.8)" }}
                     onKeyDown={(e) => e.key === "Enter" && handleImport()}
                   />
                   <button
                     onClick={handleImport}
                     disabled={!importDir.trim() || importing}
-                    className="px-4 h-9 rounded-input bg-neon-cyan text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-neon-glow transition-all"
+                    className="px-4 h-9 rounded-lg bg-accent text-bg-primary text-sm font-medium disabled:opacity-40 hover:shadow-glow transition-all"
                   >
                     {importing ? "导入中..." : "导入"}
                   </button>
@@ -409,19 +441,20 @@ export function SettingsPanel() {
                   {browseItems.length === 0 && !browsing ? (
                     <button
                       onClick={handleBrowseOpen}
-                      className="w-full h-9 rounded-input border border-dashed border-white/[0.12] bg-bg-card text-sm text-text-secondary hover:text-neon-cyan hover:border-neon-cyan/30 transition-all flex items-center justify-center gap-1.5"
+                      className="w-full h-9 rounded-lg border border-dashed border-border-light text-sm text-text-secondary hover:text-accent hover:border-accent/30 transition-all flex items-center justify-center gap-1.5"
+                      style={{ background: "rgba(16,16,22,0.4)" }}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
                       浏览文件夹
                     </button>
                   ) : (
-                    <div className="rounded-card border border-white/[0.06] bg-bg-card overflow-hidden">
+                    <div className="rounded-card border border-border-subtle overflow-hidden" style={{ background: "rgba(16,16,22,0.6)" }}>
                       {/* Browser header */}
-                      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-bg-secondary/50">
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-border-subtle" style={{ background: "rgba(10,10,14,0.5)" }}>
                         <button
                           onClick={handleBrowseUp}
                           disabled={browseParent === null}
-                          className="p-1 text-text-secondary hover:text-neon-cyan disabled:opacity-30 transition-colors"
+                          className="p-1 text-text-secondary hover:text-accent disabled:opacity-30 transition-colors"
                           title="上级目录"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
@@ -432,7 +465,7 @@ export function SettingsPanel() {
                         {browsePath && (
                           <button
                             onClick={() => { setImportDir(browsePath); }}
-                            className="px-2 py-0.5 text-[10px] rounded bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-colors"
+                            className="px-2 py-0.5 text-[10px] rounded bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
                           >
                             选此目录
                           </button>
@@ -449,9 +482,9 @@ export function SettingsPanel() {
                             <button
                               key={item.path}
                               onClick={() => handleBrowseSelect(item.path)}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-neon-cyan/[0.05] transition-colors text-left"
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-accent/5 transition-colors text-left"
                             >
-                              <FolderOpen className="w-3.5 h-3.5 text-neon-purple shrink-0" />
+                              <FolderOpen className="w-3.5 h-3.5 text-accent shrink-0" />
                               <span className="truncate">{item.name}</span>
                             </button>
                           ))
@@ -463,7 +496,7 @@ export function SettingsPanel() {
                 {importResult && (
                   <p className={cn(
                     "text-xs mt-2",
-                    importResult.includes("失败") ? "text-red-400" : "text-neon-cyan"
+                    importResult.includes("失败") ? "text-danger" : "text-accent"
                   )}>
                     {importResult}
                   </p>
@@ -494,7 +527,7 @@ export function SettingsPanel() {
                   max="10"
                   step="0.5"
                   defaultValue="3"
-                  className="w-full accent-neon-cyan"
+                  className="w-full accent-accent"
                 />
                 <div className="flex justify-between text-[10px] text-text-disabled mt-1">
                   <span>0s</span>
@@ -505,12 +538,59 @@ export function SettingsPanel() {
             </div>
           )}
 
+          {/* Tab: Theme */}
+          {activeTab === "theme" && (
+            <div className="space-y-3">
+              <p className="text-sm text-text-secondary mb-4">选择界面主题</p>
+              {THEMES.map((t) => {
+                const selected = currentTheme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setTheme(t.id);
+                      configApi.update("theme", t.id).catch(() => {});
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-4 p-4 rounded-card border transition-all duration-200 text-left",
+                      selected
+                        ? "border-accent/40 bg-accent/[0.06] shadow-glow"
+                        : "border-border-subtle hover:border-accent/20"
+                    )}
+                    style={!selected ? { background: "rgba(16,16,22,0.6)" } : undefined}
+                  >
+                    {/* Color preview */}
+                    <div className="flex gap-1 shrink-0">
+                      {t.colors.map((c, i) => (
+                        <div
+                          key={i}
+                          className="w-6 h-6 rounded-md first:rounded-l-lg last:rounded-r-lg"
+                          style={{ background: c }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-text-primary">{t.label}</span>
+                      <p className="text-xs text-text-secondary mt-0.5">{t.desc}</p>
+                    </div>
+                    <div
+                      className={cn(
+                        "w-4 h-4 rounded-full border-2 transition-colors shrink-0",
+                        selected ? "border-accent bg-accent" : "border-text-disabled"
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Tab: About */}
           {activeTab === "about" && (
             <div className="space-y-4 text-sm text-text-secondary">
               <div className="text-center py-6">
-                <h3 className="text-xl font-bold text-neon-cyan neon-text mb-1">Butterfly Radio</h3>
-                <p className="text-text-disabled">版本 0.1.0</p>
+                <h3 className="text-xl font-bold text-accent mb-1 tracking-[0.15em]">Butterfly Radio</h3>
+                <p className="text-text-disabled font-mono font-digital tracking-wider">v0.1.0</p>
               </div>
               <p>本地私有化 AI 电台，完全离线运行，零隐私泄露。</p>
               <p>基于 Python + React + Electron 构建，支持 LLM 口播、TTS 语音合成、实时互动。</p>
@@ -544,8 +624,9 @@ function ToggleRow({ label, desc, defaultChecked = false, checked: controlledChe
         onClick={toggle}
         className={cn(
           "w-10 h-5 rounded-full transition-colors duration-200 relative",
-          checked ? "bg-neon-cyan" : "bg-text-disabled"
+          checked ? "bg-accent" : "bg-white/[0.08]"
         )}
+        style={checked ? { boxShadow: "0 0 8px color-mix(in srgb, var(--accent) 30%, transparent)" } : undefined}
       >
         <div className={cn(
           "w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform duration-200",

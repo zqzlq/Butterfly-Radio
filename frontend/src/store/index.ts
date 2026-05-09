@@ -31,6 +31,8 @@ export interface User {
   avatar?: string;
 }
 
+export type ThemeId = "sci-fi" | "ins" | "warm";
+
 // ─── State ───
 
 interface PlayerState {
@@ -62,6 +64,9 @@ interface PlayerState {
 
   // AI Settings
   streamingEnabled: boolean;
+
+  // Theme
+  theme: ThemeId;
 
   // User
   user: User | null;
@@ -97,6 +102,9 @@ interface PlayerState {
   setLoading: (loading: boolean) => void;
   setStreamingEnabled: (enabled: boolean) => void;
 
+  // Actions — Theme
+  setTheme: (theme: ThemeId) => void;
+
   // Actions — User
   setUser: (user: User | null) => void;
   setInteractions: (interactions: any[]) => void;
@@ -127,6 +135,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isLoading: true,
 
   streamingEnabled: true,
+
+  theme: "sci-fi" as ThemeId,
 
   user: null,
   interactions: [],
@@ -169,6 +179,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setOnline: (online) => set({ isOnline: online }),
   setLoading: (loading) => set({ isLoading: loading }),
   setStreamingEnabled: (enabled) => set({ streamingEnabled: enabled }),
+
+  setTheme: (theme) => {
+    document.documentElement.dataset.theme = theme;
+    set({ theme });
+  },
 
   setUser: (user) => set({ user }),
   setInteractions: (interactions) => set({ interactions }),

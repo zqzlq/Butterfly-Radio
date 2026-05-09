@@ -6,49 +6,50 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          primary: "#0A0A0F",
-          card: "#12121A",
-          secondary: "#1A1A28",
+          primary: "var(--bg-primary)",
+          card: "var(--bg-card)",
+          secondary: "var(--bg-secondary)",
         },
-        neon: {
-          cyan: "#00F0FF",
-          pink: "#FF006E",
-          purple: "#7B61FF",
+        accent: {
+          DEFAULT: "var(--accent)",
+          bright: "var(--accent-bright)",
+          dim: "var(--accent-dim)",
+        },
+        danger: {
+          DEFAULT: "var(--danger)",
         },
         text: {
-          primary: "#E8E8F0",
-          secondary: "#8888A0",
-          disabled: "#3A3A50",
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          disabled: "var(--text-disabled)",
+        },
+        border: {
+          subtle: "var(--border-subtle)",
+          light: "var(--border-light)",
         },
       },
       fontFamily: {
         sans: ["Inter", "Noto Sans SC", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "Source Code Pro", "monospace"],
+        digital: ["JetBrains Mono", "Source Code Pro", "monospace"],
       },
       borderRadius: {
-        card: "16px",
+        card: "12px",
         capsule: "24px",
-        input: "12px",
+        input: "8px",
       },
       boxShadow: {
-        neon: "0 4px 24px rgba(0, 240, 255, 0.08)",
-        "neon-hover": "0 8px 32px rgba(0, 240, 255, 0.15)",
-        "neon-glow": "0 0 12px rgba(0, 240, 255, 0.3)",
-      },
-      backdropBlur: {
-        glass: "20px",
+        card: "0 1px 3px rgba(0, 0, 0, 0.4)",
+        glow: "0 0 8px color-mix(in srgb, var(--accent) 15%, transparent)",
+        "glow-strong": "0 0 16px color-mix(in srgb, var(--accent) 25%, transparent)",
       },
       animation: {
-        "pulse-neon": "pulseNeon 2s ease-in-out infinite",
         "fade-in-up": "fadeInUp 0.4s ease-out",
         "rotate-slow": "rotateSlow 8s linear infinite",
         spectrum: "spectrum 0.5s ease-in-out",
+        "pulse-green": "pulseGreen 2s ease-in-out infinite",
       },
       keyframes: {
-        pulseNeon: {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
-        },
         fadeInUp: {
           "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
@@ -60,6 +61,10 @@ const config: Config = {
         spectrum: {
           "0%, 100%": { transform: "scaleY(0.3)" },
           "50%": { transform: "scaleY(1)" },
+        },
+        pulseGreen: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.4" },
         },
       },
     },

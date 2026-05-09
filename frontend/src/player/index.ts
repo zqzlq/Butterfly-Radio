@@ -131,6 +131,12 @@ export function loadAndPlay(song: Song): void {
   store.setCurrentSong(song);
   store.setDuration(song.duration);
 
+  // Sync queueIndex so skipNext/skipPrev/advanceToNext work correctly
+  const idx = store.queue.findIndex((s) => s.id === song.id);
+  if (idx !== -1) {
+    store.setQueueIndex(idx);
+  }
+
   // Play
   currentHowl.play();
 
